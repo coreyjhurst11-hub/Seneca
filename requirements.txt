@@ -2,3 +2,4 @@ flask
 yfinance
 stripe
 anthropic
+gunicorn
