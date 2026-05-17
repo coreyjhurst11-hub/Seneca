@@ -1,4 +1,5 @@
 flask
-gunicorn
 yfinance
 stripe
+anthropic
+weasyprint
