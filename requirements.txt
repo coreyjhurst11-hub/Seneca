@@ -2,4 +2,3 @@ flask
 yfinance
 stripe
 anthropic
-weasyprint
