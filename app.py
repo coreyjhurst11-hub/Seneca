@@ -934,60 +934,60 @@ main{{flex:1;overflow-y:auto;padding:0;padding-bottom:calc(20px + env(safe-area-
 .fdesc{{font-size:.68rem;color:var(--muted);font-style:italic;line-height:1.6}}
 .disc-box{{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-top:11px}}
 .disc-box p{{font-size:.62rem;color:var(--dim);font-style:italic;line-height:1.8}}
-.about-page{padding:0 0 40px}
-.about-hero{background:linear-gradient(180deg,var(--card2) 0%,var(--bg) 100%);border-bottom:1px solid var(--border);padding:36px 20px 32px;text-align:center;position:relative;overflow:hidden}
-.about-hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(200,138,26,.07),transparent 70%);pointer-events:none}
-.about-hero-gem{width:56px;height:56px;background:linear-gradient(135deg,var(--g2),var(--g3));transform:rotate(45deg);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;box-shadow:0 0 40px rgba(232,170,52,.2),0 0 0 1px rgba(232,170,52,.2)}
-.about-hero-gem span{transform:rotate(-45deg);font-size:1rem;color:var(--bg);font-weight:700}
-.about-hero-title{font-size:2.6rem;font-weight:300;color:var(--g3);letter-spacing:.35em;margin-bottom:4px;position:relative;z-index:1}
-.about-hero-sub{font-size:.78rem;color:var(--sub);font-style:italic;letter-spacing:.18em;margin-bottom:22px;position:relative;z-index:1;font-family:'Share Tech Mono',monospace}
-.about-hero-rule{width:120px;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:0 auto 22px}
-.about-hero-pitch{max-width:480px;margin:0 auto;font-size:.9rem;color:var(--sub);line-height:1.85;font-style:italic;position:relative;z-index:1}
-.about-section-label{font-family:'Share Tech Mono',monospace;font-size:.58rem;color:var(--muted);letter-spacing:.18em;padding:22px 18px 10px;display:flex;align-items:center;gap:10px}
-.about-section-label::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent)}
-.about-features{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 14px 4px}
-.af-card{background:linear-gradient(160deg,var(--card2),var(--card));border:1px solid var(--border);border-radius:16px;padding:16px 14px 14px;position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s}
-.af-card:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.3)}
-.af-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
-.af-card.af-gold::before{background:linear-gradient(90deg,var(--gold),var(--g2))}
-.af-card.af-turq::before{background:linear-gradient(90deg,var(--turq),var(--t2))}
-.af-card.af-muted::before{background:linear-gradient(90deg,var(--muted),var(--dim))}
-.af-icon{font-size:1.3rem;margin-bottom:8px;opacity:.85}
-.af-title{font-family:'Share Tech Mono',monospace;font-size:.58rem;font-weight:700;letter-spacing:.1em;margin-bottom:7px}
-.af-card.af-gold .af-title{color:var(--g2)}
-.af-card.af-turq .af-title{color:var(--t3)}
-.af-card.af-muted .af-title{color:var(--sub)}
-.af-body{font-size:.72rem;color:var(--sub);line-height:1.7;margin-bottom:10px;font-style:italic}
-.af-formula{font-family:'Share Tech Mono',monospace;font-size:.5rem;color:var(--dim);border-top:1px solid var(--border);padding-top:8px;letter-spacing:.04em}
-.about-model-card{display:flex;margin:0 14px 8px;background:linear-gradient(160deg,var(--card2),var(--card));border:1px solid var(--border);border-radius:13px;overflow:hidden;transition:transform .15s}
-.about-model-card:hover{transform:translateX(2px)}
-.amc-left{width:3px;flex-shrink:0}
-.amc-left.gold{background:linear-gradient(180deg,var(--g3),var(--gold))}
-.amc-left.turq{background:linear-gradient(180deg,var(--t3),var(--turq))}
-.amc-left.muted{background:linear-gradient(180deg,var(--muted),var(--dim))}
-.amc-body{padding:12px 14px;flex:1}
-.amc-name{font-size:.78rem;font-weight:600;color:var(--g2);letter-spacing:.05em;margin-bottom:3px}
-.amc-eq{font-family:'Share Tech Mono',monospace;font-size:.58rem;color:var(--t3);margin-bottom:6px}
-.amc-desc{font-size:.7rem;color:var(--sub);font-style:italic;line-height:1.65}
-.about-pricing{margin:0 14px 14px;background:linear-gradient(160deg,var(--card2),var(--card));border:1px solid var(--gold);border-radius:16px;overflow:hidden;display:flex;align-items:stretch}
-.ap-left{padding:22px 20px;text-align:center;flex-shrink:0;display:flex;flex-direction:column;justify-content:center;background:rgba(200,138,26,.06)}
-.ap-price{font-size:2.4rem;font-weight:300;color:var(--g3);line-height:1}
-.ap-per{font-size:.9rem;color:var(--sub)}
-.ap-cancel{font-size:.58rem;color:var(--dim);font-style:italic;margin-top:4px;font-family:'Share Tech Mono',monospace;letter-spacing:.04em}
-.ap-divider{width:1px;background:var(--border);flex-shrink:0}
-.ap-features{padding:16px 18px;display:flex;flex-direction:column;gap:7px;justify-content:center}
-.ap-feat{font-size:.76rem;color:var(--sub);font-style:italic}
-.about-subscribe-btn{display:block;width:calc(100% - 28px);margin:0 14px 20px;background:linear-gradient(135deg,var(--turq),var(--t2));color:var(--bg);border:none;border-radius:13px;padding:15px;font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;letter-spacing:.08em;cursor:pointer;transition:all .22s;box-shadow:0 4px 20px rgba(30,122,106,.25)}
-.about-subscribe-btn:hover{transform:translateY(-1px);box-shadow:0 8px 28px rgba(30,122,106,.35)}
-.about-disc{margin:0 14px;font-size:.62rem;color:var(--dim);font-style:italic;line-height:1.8;text-align:center;padding:14px;border-top:1px solid var(--border)}
-.tabs{box-shadow:0 2px 12px rgba(0,0,0,.2)}
-.mc{box-shadow:0 2px 8px rgba(0,0,0,.2)}
-.health-card{box-shadow:0 4px 20px rgba(0,0,0,.25)}
-.hero-card{box-shadow:0 12px 48px rgba(0,0,0,.5),inset 0 1px 0 rgba(232,170,52,.1)}
-.verdict-detail-card{box-shadow:0 4px 18px rgba(0,0,0,.2)}
-.ai-card{box-shadow:0 4px 18px rgba(0,0,0,.2)}
-.modal{box-shadow:0 24px 80px rgba(0,0,0,.6)}
-.empty-tile{transition:transform .2s}.empty-tile:hover{transform:translateY(-2px)}
+.about-page{{padding:0 0 40px}}
+.about-hero{{background:linear-gradient(180deg,var(--card2) 0%,var(--bg) 100%);border-bottom:1px solid var(--border);padding:36px 20px 32px;text-align:center;position:relative;overflow:hidden}}
+.about-hero::before{{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(200,138,26,.07),transparent 70%);pointer-events:none}}
+.about-hero-gem{{width:56px;height:56px;background:linear-gradient(135deg,var(--g2),var(--g3));transform:rotate(45deg);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;box-shadow:0 0 40px rgba(232,170,52,.2),0 0 0 1px rgba(232,170,52,.2)}}
+.about-hero-gem span{{transform:rotate(-45deg);font-size:1rem;color:var(--bg);font-weight:700}}
+.about-hero-title{{font-size:2.6rem;font-weight:300;color:var(--g3);letter-spacing:.35em;margin-bottom:4px;position:relative;z-index:1}}
+.about-hero-sub{{font-size:.78rem;color:var(--sub);font-style:italic;letter-spacing:.18em;margin-bottom:22px;position:relative;z-index:1;font-family:'Share Tech Mono',monospace}}
+.about-hero-rule{{width:120px;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:0 auto 22px}}
+.about-hero-pitch{{max-width:480px;margin:0 auto;font-size:.9rem;color:var(--sub);line-height:1.85;font-style:italic;position:relative;z-index:1}}
+.about-section-label{{font-family:'Share Tech Mono',monospace;font-size:.58rem;color:var(--muted);letter-spacing:.18em;padding:22px 18px 10px;display:flex;align-items:center;gap:10px}}
+.about-section-label::after{{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent)}}
+.about-features{{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 14px 4px}}
+.af-card{{background:linear-gradient(160deg,var(--card2),var(--card));border:1px solid var(--border);border-radius:16px;padding:16px 14px 14px;position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s}}
+.af-card:hover{{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.3)}}
+.af-card::before{{content:'';position:absolute;top:0;left:0;right:0;height:2px}}
+.af-card.af-gold::before{{background:linear-gradient(90deg,var(--gold),var(--g2))}}
+.af-card.af-turq::before{{background:linear-gradient(90deg,var(--turq),var(--t2))}}
+.af-card.af-muted::before{{background:linear-gradient(90deg,var(--muted),var(--dim))}}
+.af-icon{{font-size:1.3rem;margin-bottom:8px;opacity:.85}}
+.af-title{{font-family:'Share Tech Mono',monospace;font-size:.58rem;font-weight:700;letter-spacing:.1em;margin-bottom:7px}}
+.af-card.af-gold .af-title{{color:var(--g2)}}
+.af-card.af-turq .af-title{{color:var(--t3)}}
+.af-card.af-muted .af-title{{color:var(--sub)}}
+.af-body{{font-size:.72rem;color:var(--sub);line-height:1.7;margin-bottom:10px;font-style:italic}}
+.af-formula{{font-family:'Share Tech Mono',monospace;font-size:.5rem;color:var(--dim);border-top:1px solid var(--border);padding-top:8px;letter-spacing:.04em}}
+.about-model-card{{display:flex;margin:0 14px 8px;background:linear-gradient(160deg,var(--card2),var(--card));border:1px solid var(--border);border-radius:13px;overflow:hidden;transition:transform .15s}}
+.about-model-card:hover{{transform:translateX(2px)}}
+.amc-left{{width:3px;flex-shrink:0}}
+.amc-left.gold{{background:linear-gradient(180deg,var(--g3),var(--gold))}}
+.amc-left.turq{{background:linear-gradient(180deg,var(--t3),var(--turq))}}
+.amc-left.muted{{background:linear-gradient(180deg,var(--muted),var(--dim))}}
+.amc-body{{padding:12px 14px;flex:1}}
+.amc-name{{font-size:.78rem;font-weight:600;color:var(--g2);letter-spacing:.05em;margin-bottom:3px}}
+.amc-eq{{font-family:'Share Tech Mono',monospace;font-size:.58rem;color:var(--t3);margin-bottom:6px}}
+.amc-desc{{font-size:.7rem;color:var(--sub);font-style:italic;line-height:1.65}}
+.about-pricing{{margin:0 14px 14px;background:linear-gradient(160deg,var(--card2),var(--card));border:1px solid var(--gold);border-radius:16px;overflow:hidden;display:flex;align-items:stretch}}
+.ap-left{{padding:22px 20px;text-align:center;flex-shrink:0;display:flex;flex-direction:column;justify-content:center;background:rgba(200,138,26,.06)}}
+.ap-price{{font-size:2.4rem;font-weight:300;color:var(--g3);line-height:1}}
+.ap-per{{font-size:.9rem;color:var(--sub)}}
+.ap-cancel{{font-size:.58rem;color:var(--dim);font-style:italic;margin-top:4px;font-family:'Share Tech Mono',monospace;letter-spacing:.04em}}
+.ap-divider{{width:1px;background:var(--border);flex-shrink:0}}
+.ap-features{{padding:16px 18px;display:flex;flex-direction:column;gap:7px;justify-content:center}}
+.ap-feat{{font-size:.76rem;color:var(--sub);font-style:italic}}
+.about-subscribe-btn{{display:block;width:calc(100% - 28px);margin:0 14px 20px;background:linear-gradient(135deg,var(--turq),var(--t2));color:var(--bg);border:none;border-radius:13px;padding:15px;font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;letter-spacing:.08em;cursor:pointer;transition:all .22s;box-shadow:0 4px 20px rgba(30,122,106,.25)}}
+.about-subscribe-btn:hover{{transform:translateY(-1px);box-shadow:0 8px 28px rgba(30,122,106,.35)}}
+.about-disc{{margin:0 14px;font-size:.62rem;color:var(--dim);font-style:italic;line-height:1.8;text-align:center;padding:14px;border-top:1px solid var(--border)}}
+.tabs{{box-shadow:0 2px 12px rgba(0,0,0,.2)}}
+.mc{{box-shadow:0 2px 8px rgba(0,0,0,.2)}}
+.health-card{{box-shadow:0 4px 20px rgba(0,0,0,.25)}}
+.hero-card{{box-shadow:0 12px 48px rgba(0,0,0,.5),inset 0 1px 0 rgba(232,170,52,.1)}}
+.verdict-detail-card{{box-shadow:0 4px 18px rgba(0,0,0,.2)}}
+.ai-card{{box-shadow:0 4px 18px rgba(0,0,0,.2)}}
+.modal{{box-shadow:0 24px 80px rgba(0,0,0,.6)}}
+.empty-tile{{transition:transform .2s}}.empty-tile:hover{{transform:translateY(-2px)}}
 
 </style>
 </head>
