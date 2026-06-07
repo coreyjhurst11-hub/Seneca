@@ -1,0 +1,1621 @@
+#!/usr/bin/env python3
+"""SENECA — Intrinsic Value Oracle v4
+  + Persistent server-side watchlist
+  + Health Score (deterministic + LLM cross-verification)
+  + Empty state landing design with investor quotes
+  + Stock models for stocks, ETF models for ETFs only
+  + Composite at top, health score below composite
+"""
+
+import os, math, io, hashlib, json, pathlib
+from datetime import datetime, timedelta
+from flask import Flask, request, jsonify, session, send_file
+
+app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "seneca-secret-2025")
+app.config.update(
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE", "1") == "1",
+)
+
+STRIPE_SECRET_KEY      = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
+STRIPE_PRICE_ID        = os.environ.get("STRIPE_PRICE_ID", "")
+STRIPE_WEBHOOK_SECRET  = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+GROQ_API_KEY           = os.environ.get("GROQ_API_KEY", "")
+
+# ── User store (with watchlist) ───────────────────────────────────────────────
+USER_FILE = pathlib.Path(os.environ.get("USER_FILE", "/tmp/seneca_users.json"))
+import hmac, secrets, time as _time
+
+def load_users():
+    try: return json.loads(USER_FILE.read_text()) if USER_FILE.exists() else {}
+    except: return {}
+
+def save_users(u):
+    try:
+        tmp = USER_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(u))
+        tmp.replace(USER_FILE)
+    except: pass
+
+def hash_pw(pw, salt=None):
+    """PBKDF2-HMAC-SHA256, 200k iterations, per-user salt. Returns 'salt$hash'."""
+    if salt is None:
+        salt = secrets.token_hex(16)
+    dk = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 200_000)
+    return f"{salt}${dk.hex()}"
+
+def verify_pw(pw, stored):
+    """Constant-time verify. Supports legacy plain-sha256 with transparent upgrade."""
+    try:
+        if "$" in stored:
+            salt, _ = stored.split("$", 1)
+            return hmac.compare_digest(hash_pw(pw, salt), stored)
+        # legacy: bare sha256 hex
+        legacy = hashlib.sha256(pw.encode()).hexdigest()
+        return hmac.compare_digest(legacy, stored)
+    except Exception:
+        return False
+
+def _valid_email(e):
+    return isinstance(e, str) and 3 < len(e) <= 254 and "@" in e and "." in e.split("@")[-1]
+
+def create_user(email, pw):
+    email = (email or "").lower().strip()
+    if not _valid_email(email): return False, "Enter a valid email"
+    if not pw or len(pw) < 8: return False, "Password must be at least 8 characters"
+    if len(pw) > 200: return False, "Password too long"
+    users = load_users()
+    if email in users: return False, "Email already registered"
+    users[email] = {"pw": hash_pw(pw), "subscribed": False, "watchlist": []}
+    save_users(users); return True, "ok"
+
+def verify_user(email, pw):
+    users = load_users(); email = (email or "").lower().strip()
+    u = users.get(email)
+    if not u:
+        # constant-time dummy to avoid leaking which emails exist
+        hash_pw(pw or "x"); return False, "Incorrect email or password"
+    if not verify_pw(pw or "", u["pw"]):
+        return False, "Incorrect email or password"
+    # transparent upgrade of legacy hashes
+    if "$" not in u["pw"]:
+        u["pw"] = hash_pw(pw); users[email] = u; save_users(users)
+    return True, u
+
+# ── Brute-force throttle (per-IP, in-memory) ──────────────────────────────────
+_login_attempts = {}
+def throttle_check(ip):
+    now = _time.time()
+    rec = _login_attempts.get(ip, [])
+    rec = [t for t in rec if now - t < 900]  # 15-min window
+    _login_attempts[ip] = rec
+    return len(rec) < 8  # max 8 attempts / 15 min
+def throttle_hit(ip):
+    _login_attempts.setdefault(ip, []).append(_time.time())
+
+# ── Free-lookup tracking (per-IP, persistent across sessions/windows) ─────────
+LOOKUP_FILE = pathlib.Path(os.environ.get("LOOKUP_FILE", "/tmp/seneca_lookups.json"))
+def _load_lookups():
+    try: return json.loads(LOOKUP_FILE.read_text()) if LOOKUP_FILE.exists() else {}
+    except: return {}
+def _save_lookups(d):
+    try:
+        tmp = LOOKUP_FILE.with_suffix(".tmp"); tmp.write_text(json.dumps(d)); tmp.replace(LOOKUP_FILE)
+    except: pass
+def client_ip():
+    xff = request.headers.get("X-Forwarded-For", "")
+    if xff: return xff.split(",")[0].strip()
+    return request.remote_addr or "unknown"
+def ip_lookup_count(ip):
+    return int(_load_lookups().get(ip, 0))
+def ip_lookup_inc(ip):
+    d = _load_lookups(); d[ip] = int(d.get(ip, 0)) + 1; _save_lookups(d)
+
+def get_user(email):
+    return load_users().get(email.lower().strip())
+
+def set_subscribed(email):
+    users = load_users(); email = email.lower().strip()
+    if email in users: users[email]["subscribed"] = True; save_users(users)
+
+def get_watchlist(email):
+    u = get_user(email); return u.get("watchlist", []) if u else []
+
+def save_watchlist(email, wl):
+    users = load_users(); email = email.lower().strip()
+    if email in users: users[email]["watchlist"] = wl; save_users(users)
+
+@app.after_request
+def _security_headers(resp):
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["X-Frame-Options"] = "DENY"
+    resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    resp.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    if request.is_secure:
+        resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return resp
+
+def seed_master_account():
+    """Ensure master test account always exists with full subscription."""
+    users = load_users()
+    users["korbeark1@aol.com"] = {
+        "pw": hash_pw("Jasper1"),
+        "subscribed": True,
+        "watchlist": []
+    }
+    save_users(users)
+
+# Seed on startup
+seed_master_account()
+
+
+# ── ETF detection ─────────────────────────────────────────────────────────────
+ETF_SET = {"SPY","QQQ","IWM","DIA","VTI","VOO","VEA","VWO","GLD","SLV",
+           "TLT","IEF","LQD","HYG","XLF","XLK","XLE","XLV","XLI","XLB",
+           "ARKK","IVV","AGG","BND","VIG","SCHD","DGRO","VYM","HDV",
+           "EFA","EEM","IEMG","ACWI","VT","MCHI","FXI","EWJ","SQQQ",
+           "TQQQ","SPXU","SPXL","UPRO","USO","UNG","BNDX","NOBL"}
+
+def is_fund(ticker, info):
+    if ticker.upper() in ETF_SET: return True
+    return (info.get("quoteType") or "").upper() in ("ETF","MUTUALFUND","INDEX")
+
+def resolve_ticker(q):
+    import yfinance as yf; q = q.strip()
+    if len(q) <= 6 and q.replace("-","").replace(".","").isalpha(): return q.upper()
+    try:
+        res = yf.Search(q, max_results=5); quotes = res.quotes
+        if quotes:
+            for r in quotes:
+                if r.get("quoteType","").upper() == "EQUITY": return r["symbol"]
+            return quotes[0]["symbol"]
+    except: pass
+    return q.upper()
+
+# ── Valuation models ──────────────────────────────────────────────────────────
+def gn(e,b): return math.sqrt(22.5*e*b) if e>0 and b>0 else None
+def gg(e,g): return e*(8.5+2*g)*4.4/4.5 if e>0 and g else None
+def buf(e,g):
+    if e<=0 or not g: return None
+    r,d=min(g/100,.25),.09
+    return sum(e*(1+r)**y/(1+d)**y for y in range(1,11))+(e*(1+r)**10*15)/(1+d)**10
+def lyn(e,g): return e*g if e>0 and g>0 else None
+def sim(p,pe,pb,roe,mom):
+    if pe<=0 or pb<=0 or roe<=0: return None
+    return p*(roe/pe)*(1/pb)*(1+(mom/100)*0.3)*12
+def fdcf(f,g):
+    if f<=0 or not g: return None
+    r,d,tg=min(g/100,.30),.10,.025
+    return sum(f*(1+r)**y/(1+d)**y for y in range(1,11))+(f*(1+r)**10*(1+tg)/(d-tg))/(1+d)**10
+
+def capm_r(beta):
+    # CAPM: Rf=4.3% (10yr Treasury), market risk premium=5.5%
+    b = max(0.3, min(float(beta) if beta and beta > 0 else 1.0, 3.0))
+    return 0.043 + b * 0.055
+
+def gordon_ddm(div_ps, div_growth_pct, beta):
+    # Gordon Growth Model: P = D1/(r-g)
+    # D1 = D0*(1+g), r = CAPM rate, g capped at 3.5% and must be < r
+    if div_ps <= 0: return None
+    r = capm_r(beta)
+    g = min(div_growth_pct / 100 if div_growth_pct else 0.02, 0.035, r - 0.01)
+    if g <= 0: g = 0.02
+    if r <= g: return None
+    return (div_ps * (1 + g)) / (r - g)
+
+def etf_ddm(price, div_yield_pct, beta):
+    # ETF DDM: CAPM-based r, 2.5% long-run growth
+    if div_yield_pct <= 0: return None
+    div_ps = price * (div_yield_pct / 100)
+    if div_ps <= 0: return None
+    r = capm_r(beta)
+    g = 0.025
+    if r <= g: r = g + 0.03
+    return (div_ps * (1 + g)) / (r - g)
+
+def comp_stock(vals):
+    w={"gn":.18,"gg":.13,"buf":.22,"lyn":.13,"sim":.09,"dcf":.15,"ddm":.10}; t=ws=0
+    for k,wt in w.items():
+        v=vals.get(k)
+        if v and v>0: t+=v*wt; ws+=wt
+    return t/ws if ws>0 else None
+
+def signal(val, price):
+    if not val or val<=0: return "na","Insufficient data"
+    m=(val-price)/price*100
+    if m>=30:  return "up",  f"▲ {m:.0f}% upside · DEEPLY UNDERVALUED"
+    if m>=10:  return "up",  f"▲ {m:.0f}% upside · Modestly Undervalued"
+    if m<=-30: return "down",f"▼ {abs(m):.0f}% · SIGNIFICANTLY OVERVALUED"
+    if m<=-10: return "down",f"▼ {abs(m):.0f}% above fair · Overvalued"
+    s="+" if m>=0 else ""
+    return "fair",f"≈ {s}{m:.0f}% · Fairly Valued"
+
+# ── Health Score (deterministic) ──────────────────────────────────────────────
+def compute_health_score(info, is_etf=False):
+    """
+    Returns dict: score 0-100, grade A/B/C/D/F, flags list, breakdown dict
+    Deterministic formula-based. LLM layer added separately via /api/health-ai
+    """
+    flags = []
+    breakdown = {}
+
+    if is_etf:
+        # ETF health: expense ratio, AUM, diversification proxy
+        er = float(info.get("annualReportExpenseRatio") or info.get("totalExpenseRatio") or 0)
+        aum = float(info.get("totalAssets") or 0)
+        score = 70  # base
+        if er > 0:
+            if er < 0.005:   score += 15; breakdown["Expense Ratio"] = f"{er*100:.2f}% ✦ Excellent"
+            elif er < 0.01:  score += 8;  breakdown["Expense Ratio"] = f"{er*100:.2f}% · Good"
+            elif er < 0.02:  score += 0;  breakdown["Expense Ratio"] = f"{er*100:.2f}% · Average"
+            else:            score -= 10; flags.append("High expense ratio"); breakdown["Expense Ratio"] = f"{er*100:.2f}% ⚠ High"
+        if aum > 10e9:  score += 10; breakdown["AUM"] = f"${aum/1e9:.0f}B ✦ Large"
+        elif aum > 1e9: score += 5;  breakdown["AUM"] = f"${aum/1e9:.1f}B · Mid"
+        elif aum > 0:   score -= 5;  flags.append("Small fund AUM"); breakdown["AUM"] = f"${aum/1e6:.0f}M ⚠ Small"
+        score = max(0, min(100, score))
+    else:
+        def g(k, fb=0.0):
+            try: v=info.get(k); f=float(v); return f if math.isfinite(f) else fb
+            except: return fb
+
+        score = 0
+        weights = 0
+
+        # 1. Profitability (25pts)
+        roe = g("returnOnEquity")*100
+        roa = g("returnOnAssets")*100
+        margins = g("profitMargins")*100
+        if roe > 15:   score += 10; breakdown["ROE"] = f"{roe:.1f}% ✦"
+        elif roe > 8:  score += 6;  breakdown["ROE"] = f"{roe:.1f}% ·"
+        elif roe > 0:  score += 2;  breakdown["ROE"] = f"{roe:.1f}% ·"
+        else:          flags.append("Negative ROE"); breakdown["ROE"] = f"{roe:.1f}% ⚠"
+        if roa > 8:    score += 8;  breakdown["ROA"] = f"{roa:.1f}% ✦"
+        elif roa > 3:  score += 4;  breakdown["ROA"] = f"{roa:.1f}% ·"
+        elif roa < 0:  flags.append("Negative ROA"); breakdown["ROA"] = f"{roa:.1f}% ⚠"
+        else:          breakdown["ROA"] = f"{roa:.1f}% ·"
+        if margins > 20: score += 7; breakdown["Net Margin"] = f"{margins:.1f}% ✦"
+        elif margins > 8: score += 4; breakdown["Net Margin"] = f"{margins:.1f}% ·"
+        elif margins < 0: flags.append("Negative margins"); breakdown["Net Margin"] = f"{margins:.1f}% ⚠"
+        else: breakdown["Net Margin"] = f"{margins:.1f}% ·"
+
+        # 2. Leverage / Debt (25pts)
+        de = g("debtToEquity")
+        cr = g("currentRatio")
+        ic = g("interestCoverage") if "interestCoverage" in info else None
+        if de > 0:
+            if de < 30:    score += 12; breakdown["Debt/Equity"] = f"{de:.0f}% ✦ Conservative"
+            elif de < 80:  score += 7;  breakdown["Debt/Equity"] = f"{de:.0f}% · Moderate"
+            elif de < 150: score += 3;  breakdown["Debt/Equity"] = f"{de:.0f}% · Elevated"
+            else:          flags.append("High leverage"); breakdown["Debt/Equity"] = f"{de:.0f}% ⚠ High"
+        if cr > 0:
+            if cr > 2:     score += 8;  breakdown["Current Ratio"] = f"{cr:.1f}× ✦"
+            elif cr > 1.2: score += 5;  breakdown["Current Ratio"] = f"{cr:.1f}× ·"
+            elif cr > 1:   score += 2;  breakdown["Current Ratio"] = f"{cr:.1f}× ·"
+            else:          flags.append("Weak liquidity"); breakdown["Current Ratio"] = f"{cr:.1f}× ⚠"
+        if ic and ic > 0:
+            if ic > 5:     score += 5; breakdown["Interest Coverage"] = f"{ic:.1f}× ✦"
+            elif ic > 2:   score += 2; breakdown["Interest Coverage"] = f"{ic:.1f}× ·"
+            else:          flags.append("Low interest coverage"); breakdown["Interest Coverage"] = f"{ic:.1f}× ⚠"
+
+        # 3. Cash Flow (20pts)
+        fcf = g("freeCashflow")
+        ocf = g("operatingCashflow")
+        ni  = g("netIncomeToCommon")
+        if fcf > 0:    score += 12; breakdown["Free Cash Flow"] = "Positive ✦"
+        elif fcf < 0:  flags.append("Negative FCF"); breakdown["Free Cash Flow"] = "Negative ⚠"
+        if ocf > 0 and ni > 0:
+            accrual = (ni - ocf) / max(abs(ni),1)
+            if abs(accrual) < 0.1: score += 8; breakdown["Cash Quality"] = "High ✦"
+            elif abs(accrual) < 0.3: score += 4; breakdown["Cash Quality"] = "Moderate ·"
+            else: flags.append("Earnings quality concern"); breakdown["Cash Quality"] = "Low ⚠"
+        elif ocf > 0: score += 4; breakdown["Op. Cash Flow"] = "Positive ·"
+
+        # 4. Growth (15pts)
+        eg = g("earningsGrowth")*100
+        rg = g("revenueGrowth")*100
+        if eg > 15:    score += 8; breakdown["Earnings Growth"] = f"{eg:.1f}% ✦"
+        elif eg > 5:   score += 5; breakdown["Earnings Growth"] = f"{eg:.1f}% ·"
+        elif eg < -10: flags.append("Declining earnings"); breakdown["Earnings Growth"] = f"{eg:.1f}% ⚠"
+        else: breakdown["Earnings Growth"] = f"{eg:.1f}% ·"
+        if rg > 10:    score += 7; breakdown["Revenue Growth"] = f"{rg:.1f}% ✦"
+        elif rg > 3:   score += 4; breakdown["Revenue Growth"] = f"{rg:.1f}% ·"
+        elif rg < -5:  flags.append("Declining revenue"); breakdown["Revenue Growth"] = f"{rg:.1f}% ⚠"
+        else: breakdown["Revenue Growth"] = f"{rg:.1f}% ·"
+
+        # 5. Valuation sanity (15pts)
+        pe = g("trailingPE")
+        pb = g("priceToBook")
+        if 0 < pe < 15:   score += 8; breakdown["P/E"] = f"{pe:.1f}× ✦ Value"
+        elif 0 < pe < 30: score += 5; breakdown["P/E"] = f"{pe:.1f}× · Fair"
+        elif pe > 60:     flags.append("Very high P/E"); breakdown["P/E"] = f"{pe:.1f}× ⚠ Stretched"
+        elif pe > 0:      breakdown["P/E"] = f"{pe:.1f}× ·"
+        if 0 < pb < 1.5:  score += 7; breakdown["P/B"] = f"{pb:.1f}× ✦ Value"
+        elif 0 < pb < 4:  score += 4; breakdown["P/B"] = f"{pb:.1f}× · Fair"
+        elif pb > 10:     flags.append("Very high P/B"); breakdown["P/B"] = f"{pb:.1f}× ⚠"
+        elif pb > 0:      breakdown["P/B"] = f"{pb:.1f}× ·"
+
+        score = max(0, min(100, score))
+
+    # Grade
+    if score >= 80: grade = "A"
+    elif score >= 65: grade = "B"
+    elif score >= 50: grade = "C"
+    elif score >= 35: grade = "D"
+    else: grade = "F"
+
+    return {"score": score, "grade": grade, "flags": flags, "breakdown": breakdown}
+
+# ── fetch_quote ───────────────────────────────────────────────────────────────
+def fetch_quote(query):
+    import yfinance as yf
+    ticker = resolve_ticker(query)
+    t = yf.Ticker(ticker); fi = t.fast_info
+    price=float(fi.last_price or 0); prev=float(fi.previous_close or 0)
+    lo52=float(fi.year_low or 0); hi52=float(fi.year_high or 0)
+    cap=float(fi.market_cap or 0); shares=float(fi.shares or 1)
+    if not price:
+        # Friendly error messages based on what went wrong
+        if len(ticker) > 6:
+            raise ValueError(f"Could not find a ticker for '{query}'. Try using the ticker symbol directly (e.g. AAPL, MSFT).")
+        raise ValueError(f"No market data found for '{ticker}'. It may be delisted, a private company, or an invalid symbol.")
+    info=t.info
+    def g(k,fb=0.0):
+        try: v=info.get(k); f=float(v); return f if math.isfinite(f) else fb
+        except: return fb
+    name  = info.get("longName") or info.get("shortName") or ticker
+    sector= info.get("sector") or info.get("industry") or info.get("categoryName") or "—"
+    eps=g("trailingEps"); bvps=g("bookValue"); pe=g("trailingPE"); pb=g("priceToBook")
+    roe=g("returnOnEquity")*100; beta=g("beta")
+    # Safe dividend yield: yfinance returns decimal (0.015 = 1.5%), handle None
+    _raw_dy = info.get("dividendYield") or info.get("yield") or 0
+    try: div_y = float(_raw_dy) * 100 if _raw_dy and math.isfinite(float(_raw_dy)) else 0.0
+    except: div_y = 0.0
+    # Sanity check: div yield > 25% is almost certainly bad data
+    if div_y > 25: div_y = 0.0
+    # Dividend per share for DDM
+    _div_ps = g("dividendRate") or g("lastDividendValue") or 0
+    if _div_ps <= 0 and div_y > 0: _div_ps = price * (div_y / 100)
+    # Dividend growth rate: use 5yr avg or earnings growth as proxy
+    _div_growth = (g("fiveYearAvgDividendYield") or g("earningsGrowth") or 0) * 100
+    if _div_growth < 0: _div_growth = 0
+    fcf_ps=g("freeCashflow")/shares if shares else 0
+    growth=(g("earningsGrowth") or g("revenueGrowth") or g("earningsQuarterlyGrowth") or 0)*100
+    chg=(price-prev)/prev*100 if prev else 0
+    mom=(price-lo52)/lo52*100 if lo52 else 0
+    ey=(1/pe*100) if pe>0 else 0
+    fund = is_fund(ticker, info)
+    health = compute_health_score(info, is_etf=fund)
+
+    if fund:
+        iv={}
+        if ey>0: iv["fed"]=price*(ey/4.3)
+        if pe>0: iv["per"]=price*(17.0/pe)
+        _etf_ddm_val = etf_ddm(price, div_y, beta)
+        if _etf_ddm_val: iv["ddm"] = _etf_ddm_val
+        models=[]
+        for k,nm,fm,sc,cl in [
+            ("fed","FED MODEL",         "Price × (Earnings Yield ÷ Treasury 4.3%)",          "turq","turq"),
+            ("per","P/E MEAN REVERSION","Price × (Hist. 17× P/E ÷ Current P/E)",             "gold","gold"),
+            ("ddm","GORDON GROWTH DDM", "D1 ÷ (CAPM rate − 2.5% growth)",                   "muted","muted"),
+        ]:
+            v=iv.get(k); sc2,st2=signal(v,price) if v else ("na","Insufficient data")
+            models.append({"name":nm,"formula":fm,"stripe":sc,"cls":cl,"value":v,"sig_cls":sc2,"sig_txt":st2})
+        vals=[m["value"] for m in models if m["value"] and m["value"]>0]
+        comp=sum(vals)/len(vals) if vals else None
+        atype="etf"
+    else:
+        _ddm_val = gordon_ddm(_div_ps, _div_growth, beta)
+        vd={"gn":gn(eps,bvps),"gg":gg(eps,growth),"buf":buf(eps,growth),
+            "lyn":lyn(eps,growth),"sim":sim(price,pe or 1,pb or 1,roe,mom),"dcf":fdcf(fcf_ps,growth),
+            "ddm":_ddm_val}
+        comp=comp_stock(vd); models=[]
+        for k,nm,fm,sc,cl in [
+            ("gn", "GRAHAM NUMBER",      "√( 22.5 × EPS × Book Value )",                 "gold","gold"),
+            ("gg", "GRAHAM GROWTH",      "EPS × (8.5+2g) × 4.4/AAA yield",              "gold","gold"),
+            ("buf","BUFFETT DCF",        "10yr EPS @ 9% · 15× terminal",                 "turq","turq"),
+            ("lyn","PETER LYNCH PEG",    "EPS × growth% (PEG=1)",                        "turq","turq"),
+            ("sim","SIMONS QUANT",       "ROE/PE × (1/PB) × momentum",                   "muted","muted"),
+            ("dcf","FREE CASH FLOW DCF", "10yr FCF @ 10% · 2.5% terminal",               "muted","muted"),
+            ("ddm","GORDON GROWTH DDM",  "D1 ÷ (CAPM rate − div growth%) · dividend-payers only","gold","gold"),
+        ]:
+            v=vd.get(k); sc2,st2=signal(v,price) if v else ("na","Insufficient data")
+            models.append({"name":nm,"formula":fm,"stripe":sc,"cls":cl,"value":v,"sig_cls":sc2,"sig_txt":st2})
+        atype="stock"
+
+    vt=vd2=vc=""
+    if comp and comp>0:
+        m=(comp-price)/price*100
+        if   m>=30:  vt,vd2,vc=f"✦ STRONG BUY · {m:.0f}% margin of safety","Deep value. Substantial gap between price and intrinsic worth.","up"
+        elif m>=10:  vt,vd2,vc=f"✦ UNDERVALUED · {m:.0f}% upside","Price trades below the model consensus.","up"
+        elif m<=-30: vt,vd2,vc=f"✦ AVOID · {abs(m):.0f}% above fair","Significant optimism beyond what fundamentals support.","down"
+        elif m<=-10: vt,vd2,vc=f"✦ OVERVALUED · {abs(m):.0f}% premium","Price exceeds what the models suggest.","down"
+        else:
+            s="+" if m>=0 else ""
+            vt,vd2,vc=f"✦ FAIRLY VALUED · {s}{m:.0f}% vs composite","Price is broadly in line with the consensus.","fair"
+    else:
+        vt,vd2,vc="Insufficient data for composite verdict","","fair"
+
+    return {"ticker":ticker,"name":name,"sector":sector,"asset_type":atype,
+            "price":price,"prev":prev,"eps":eps,"bvps":bvps,"pe":pe,"pb":pb,
+            "roe":roe,"growth":growth,"fcf":fcf_ps,"lo52":lo52,"hi52":hi52,
+            "mom":mom,"chg":chg,"cap":cap,"div_y":div_y,"beta":beta,
+            "composite":comp,"models":models,"verdict_text":vt,
+            "verdict_detail":vd2,"verdict_cls":vc,"earnings_yield":ey,
+            "health":health}
+
+# ── AI ────────────────────────────────────────────────────────────────────────
+def get_ai_verdict(data):
+    if not GROQ_API_KEY: return None
+    try:
+        from groq import Groq
+        c = Groq(api_key=GROQ_API_KEY)
+        comp_str = f"${data['composite']:.2f}" if data['composite'] else 'N/A'
+        p = (f"You are SENECA, a stoic value investing oracle. 3 sentences explaining why "
+             f"{data['name']} ({data['ticker']}) appears {data['verdict_cls']}:\n"
+             f"Price ${data['price']:.2f} | Fair Value {comp_str} | P/E {data['pe']:.1f} | "
+             f"Verdict: {data['verdict_text']}\nDirect, wise, no disclaimers, no bullets.")
+        msg = c.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            max_tokens=200,
+            messages=[{"role":"user","content":p}]
+        )
+        return msg.choices[0].message.content.strip()
+    except: return None
+
+def get_health_ai(data):
+    """LLM layer: cross-verify health flags, probe for hidden risks"""
+    if not GROQ_API_KEY: return None
+    try:
+        from groq import Groq
+        c = Groq(api_key=GROQ_API_KEY)
+        h=data.get("health",{})
+        flags=h.get("flags",[])
+        score=h.get("score",0)
+        grade=h.get("grade","?")
+        breakdown=h.get("breakdown",{})
+        bd_str="; ".join(f"{k}: {v}" for k,v in list(breakdown.items())[:8])
+        p = (f"You are SENECA's financial forensics engine. Analyze {data['name']} ({data['ticker']}) "
+             f"for hidden financial risks, accounting irregularities, and off-balance-sheet concerns.\n\n"
+             f"Quantitative health score: {score}/100 (Grade {grade})\n"
+             f"Key metrics: {bd_str}\n"
+             f"Flagged concerns: {', '.join(flags) if flags else 'None detected'}\n"
+             f"Sector: {data['sector']} | P/E: {data['pe']:.1f} | D/E: implied from score\n\n"
+             f"In exactly 3 sentences: (1) Confirm or challenge the health score with your assessment. "
+             f"(2) Identify the single biggest hidden risk an investor might miss. "
+             f"(3) Give a plain verdict on financial integrity. "
+             f"Be direct. No disclaimers. No bullets.")
+        msg = c.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            max_tokens=250,
+            messages=[{"role":"user","content":p}]
+        )
+        return msg.choices[0].message.content.strip()
+    except: return None
+
+# ── Routes ────────────────────────────────────────────────────────────────────
+
+@app.route("/")
+def index():
+    email = session.get("email","")
+    sub = False
+    if email:
+        u = get_user(email)
+        sub = u.get("subscribed", False) if u else False
+    return render_app(sub=sub, email=email)
+
+@app.route("/success")
+def success():
+    email = session.get("email","")
+    if STRIPE_SECRET_KEY:
+        import stripe as sl; sl.api_key = STRIPE_SECRET_KEY
+        sid = request.args.get("session_id","")
+        try:
+            s = sl.checkout.Session.retrieve(sid)
+            if s.payment_status == "paid":
+                if email: set_subscribed(email)
+                session["sub"] = True
+        except: pass
+    else:
+        session["sub"] = True
+        if email: set_subscribed(email)
+    return render_app(sub=True, email=email, toast="✦ Subscription active! Unlimited access unlocked.")
+
+@app.route("/api/signup", methods=["POST"])
+def api_signup():
+    d = request.get_json(silent=True) or {}
+    email = (d.get("email","")).strip().lower(); pw = d.get("pw","")
+    if not email or not pw: return jsonify({"ok":False,"error":"Email and password required"}), 400
+    ok, msg = create_user(email, pw)
+    if not ok: return jsonify({"ok":False,"error":msg}), 400
+    session.permanent = bool(d.get("remember", True))
+    session["email"] = email; session["sub"] = False
+    return jsonify({"ok":True,"email":email,"sub":False,"watchlist":[]})
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    ip = client_ip()
+    if not throttle_check(ip):
+        return jsonify({"ok":False,"error":"Too many attempts. Try again in 15 minutes."}), 429
+    d = request.get_json(silent=True) or {}
+    email = (d.get("email","")).strip().lower(); pw = d.get("pw","")
+    if not email or not pw: return jsonify({"ok":False,"error":"Email and password required"}), 400
+    ok, result = verify_user(email, pw)
+    if not ok:
+        throttle_hit(ip)
+        return jsonify({"ok":False,"error":result}), 401
+    session.permanent = bool(d.get("remember", True))
+    session["email"] = email; session["sub"] = result.get("subscribed", False)
+    wl = result.get("watchlist", [])
+    return jsonify({"ok":True,"email":email,"sub":result.get("subscribed",False),"watchlist":wl})
+
+@app.route("/api/logout", methods=["POST"])
+def api_logout():
+    session.clear(); return jsonify({"ok":True})
+
+@app.route("/api/watchlist", methods=["GET","POST"])
+def api_watchlist():
+    email = session.get("email","")
+    if not email: return jsonify({"ok":False,"error":"Not logged in"}), 401
+    if request.method == "GET":
+        return jsonify({"ok":True,"watchlist":get_watchlist(email)})
+    d = request.get_json(silent=True) or {}
+    wl = d.get("watchlist", [])
+    if not isinstance(wl, list): wl = []
+    import re as _re
+    clean = []
+    for t in wl:
+        s = str(t).upper().strip()[:10]
+        if s and _re.match(r'^[A-Z0-9.\-]{1,10}$', s): clean.append(s)
+    wl = clean[:25]
+    save_watchlist(email, wl)
+    return jsonify({"ok":True,"watchlist":wl})
+
+@app.route("/api/price")
+def api_price():
+    """Fast batch price endpoint — fetches all tickers in parallel threads."""
+    import yfinance as yf
+    from concurrent.futures import ThreadPoolExecutor
+    raw_tickers = request.args.get("tickers", "").strip()
+    if not raw_tickers: return jsonify({"error": "No tickers"}), 400
+    tickers = [t.strip().upper() for t in raw_tickers.split(",") if t.strip()][:10]
+
+    # Try yf.download for all at once — single HTTP call, fastest option
+    try:
+        df = yf.download(tickers, period="2d", interval="1d",
+                         auto_adjust=True, progress=False, threads=True)
+        results = {}
+        # Handle both single-ticker (flat) and multi-ticker (MultiIndex columns)
+        if hasattr(df.columns, "levels"):
+            close = df["Close"]
+        elif "Close" in df.columns:
+            close = df[["Close"]].rename(columns={"Close": tickers[0]}) if len(tickers)==1 else df["Close"]
+        else:
+            close = None
+        if close is not None:
+            for t in tickers:
+                try:
+                    col = close[t] if t in close.columns else close.iloc[:,0]
+                    vals = col.dropna()
+                    if len(vals) >= 2:
+                        price, prev = float(vals.iloc[-1]), float(vals.iloc[-2])
+                        if price:
+                            results[t] = {"price": price, "chg": round((price-prev)/prev*100 if prev else 0, 2)}
+                    elif len(vals) == 1:
+                        price = float(vals.iloc[-1])
+                        if price: results[t] = {"price": price, "chg": 0.0}
+                except Exception:
+                    pass
+        if len(results) == len(tickers):
+            return jsonify(results)
+    except Exception:
+        pass
+
+    # Fallback: parallel fast_info via thread pool (~4× faster than serial)
+    def fetch_one(t):
+        try:
+            fi = yf.Ticker(t).fast_info
+            price = float(fi.last_price or 0)
+            prev  = float(fi.previous_close or 0)
+            if price:
+                return t, {"price": price, "chg": round((price-prev)/prev*100 if prev else 0, 2)}
+        except Exception:
+            pass
+        return t, None
+
+    results = {}
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        for t, data in ex.map(fetch_one, tickers):
+            if data: results[t] = data
+    return jsonify(results)
+
+
+@app.route("/api/quote")
+def api_quote():
+    q = request.args.get("q","").strip()
+    if not q or len(q) > 12: return jsonify({"error":"Invalid ticker"}), 400
+    email = session.get("email","")
+    sub = session.get("sub", False)
+    if email and not sub:
+        u = get_user(email)
+        if u: sub = u.get("subscribed", False)
+    ip = client_ip()
+    # Persistent per-IP free lookup (survives new windows / cleared cookies)
+    if not sub and ip_lookup_count(ip) >= 1:
+        return jsonify({"error":"PAYWALL"}), 402
+    try:
+        data = fetch_quote(q)
+        if not sub:
+            ip_lookup_inc(ip)
+            session["lookups"] = session.get("lookups", 0) + 1
+        return jsonify(data)
+    except Exception as e: return jsonify({"error":str(e)}), 500
+
+@app.route("/api/ai")
+def api_ai():
+    q = request.args.get("q","").strip()
+    if not q: return jsonify({"verdict":None})
+    try: return jsonify({"verdict": get_ai_verdict(fetch_quote(q))})
+    except: return jsonify({"verdict":None})
+
+@app.route("/api/health-ai")
+def api_health_ai():
+    q = request.args.get("q","").strip()
+    if not q: return jsonify({"analysis":None})
+    try: return jsonify({"analysis": get_health_ai(fetch_quote(q))})
+    except: return jsonify({"analysis":None})
+
+@app.route("/api/checkout", methods=["POST"])
+def api_checkout():
+    if not STRIPE_SECRET_KEY: return jsonify({"url":None}), 200
+    import stripe as sl; sl.api_key = STRIPE_SECRET_KEY
+    try:
+        email = session.get("email","")
+        kw = dict(payment_method_types=["card"], mode="subscription",
+                  line_items=[{"price":STRIPE_PRICE_ID,"quantity":1}],
+                  success_url=request.host_url+"success?session_id={CHECKOUT_SESSION_ID}",
+                  cancel_url=request.host_url)
+        if email: kw["customer_email"] = email
+        s = sl.checkout.Session.create(**kw)
+        return jsonify({"url":s.url})
+    except Exception as e: return jsonify({"error":str(e)}), 500
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    if not STRIPE_SECRET_KEY: return "",200
+    import stripe as sl; sl.api_key = STRIPE_SECRET_KEY
+    payload=request.get_data(); sig=request.headers.get("Stripe-Signature","")
+    try:
+        ev=sl.Webhook.construct_event(payload,sig,STRIPE_WEBHOOK_SECRET)
+        if ev["type"]=="checkout.session.completed":
+            s=ev["data"]["object"]
+            if s.get("payment_status")=="paid":
+                em=s.get("customer_email","")
+                if em: set_subscribed(em)
+    except: pass
+    return "",200
+
+@app.route("/api/pdf")
+def api_pdf():
+    q = request.args.get("q","").strip()
+    if not q: return jsonify({"error":"No ticker"}), 400
+    sub = session.get("sub", False)
+    lookups = session.get("lookups", 0)
+    if not sub and lookups < 1: return jsonify({"error":"PAYWALL"}), 402
+    try:
+        data = fetch_quote(q); ai = get_ai_verdict(data)
+        def fp(v): return "N/A" if not v or v<=0 else f"${v:,.2f}"
+        rows = "".join(f"<tr><td>{m['name']}</td><td>{m['formula']}</td><td style='text-align:right;font-weight:bold'>{fp(m['value'])}</td><td style='text-align:right'>{m['sig_txt']}</td></tr>" for m in data["models"])
+        vc = "#3a8a24" if data["verdict_cls"]=="up" else "#a03020" if data["verdict_cls"]=="down" else "#c88a1a"
+        ai_html = (f"<div style='background:#f0f8f5;border:1px solid #1e7a6a;border-radius:8px;padding:14px;margin:12px 0'>"
+                   f"<div style='font-size:9px;letter-spacing:3px;color:#1e7a6a;text-transform:uppercase;margin-bottom:8px;font-weight:600'>SENECA AI ANALYSIS</div>"
+                   f"<p style='font-size:11px;line-height:1.7;font-style:italic;margin:0'>{ai}</p></div>") if ai else ""
+        chg_arrow = "▲" if data["chg"] >= 0 else "▼"
+        h = data.get("health",{})
+        health_html = (f"<div style='background:#fdf5e0;border:1px solid #c88a1a;border-radius:8px;padding:14px;margin:12px 0'>"
+                       f"<div style='font-size:9px;letter-spacing:3px;color:#c88a1a;text-transform:uppercase;margin-bottom:8px;font-weight:600'>HEALTH SCORE</div>"
+                       f"<div style='font-size:28px;font-weight:300;color:#c88a1a'>{h.get('score',0)}/100 &nbsp;<span style='font-size:14px'>Grade {h.get('grade','?')}</span></div>"
+                       f"<div style='font-size:10px;color:#666;margin-top:6px'>{'; '.join(h.get('flags',[])) or 'No major flags detected'}</div></div>") if h else ""
+        html = (f'<!DOCTYPE html><html><head><meta charset="UTF-8"/><style>'
+                f'body{{font-family:Georgia,serif;background:#fff;color:#1a1a1a;margin:0;padding:32px;font-size:12px}}'
+                f'.header{{border-bottom:3px solid #c88a1a;padding-bottom:16px;margin-bottom:24px;display:flex;justify-content:space-between}}'
+                f'table{{width:100%;border-collapse:collapse;margin-bottom:16px}}'
+                f'th{{background:#f5ede0;font-size:9px;padding:6px 8px;text-align:left;color:#888;text-transform:uppercase}}'
+                f'td{{padding:7px 8px;border-bottom:1px solid #f0e8d8;font-size:11px}}'
+                f'tr:nth-child(even) td{{background:#fdf8f2}}'
+                f'.footer{{border-top:1px solid #e0d0b0;margin-top:32px;padding-top:10px;font-size:9px;color:#aaa;font-style:italic;text-align:center}}'
+                f'</style></head><body>'
+                f'<div class="header"><div><div style="font-size:28px;font-weight:300;letter-spacing:6px;color:#c88a1a">SENECA</div>'
+                f'<div style="font-size:10px;color:#888;font-style:italic">Intrinsic Value Oracle</div></div>'
+                f'<div style="font-size:10px;color:#888;text-align:right">Generated {datetime.now().strftime("%B %d, %Y")}<br/>Educational purposes only</div></div>'
+                f'<div style="font-size:22px;font-weight:600">{data["name"]} ({data["ticker"]})</div>'
+                f'<div style="font-size:36px;font-weight:300;color:#c88a1a;margin:12px 0">'
+                f'${data["price"]:.2f} <span style="font-size:14px;color:#888">{chg_arrow} {abs(data["chg"]):.2f}%</span></div>'
+                f'{health_html}'
+                f'<table><tr><th>Model</th><th>Formula</th><th style="text-align:right">Fair Value</th><th style="text-align:right">Signal</th></tr>{rows}</table>'
+                f'<div style="background:#fdf5e0;border:2px solid #c88a1a;border-radius:10px;padding:16px;display:flex;justify-content:space-between;align-items:center;margin:16px 0">'
+                f'<div style="font-size:9px;letter-spacing:3px;color:#888;text-transform:uppercase">Seneca Composite</div>'
+                f'<div style="font-size:28px;font-weight:300;color:#c88a1a">{fp(data["composite"])}</div></div>'
+                f'<div style="border-left:4px solid {vc};padding:12px 16px;background:#fafafa;border-radius:0 8px 8px 0;margin:12px 0">'
+                f'<div style="font-size:14px;font-weight:600;color:{vc};margin-bottom:4px">{data["verdict_text"]}</div>'
+                f'<div style="font-size:11px;color:#666;font-style:italic">{data["verdict_detail"]}</div></div>'
+                f'{ai_html}'
+                f'<div class="footer">SENECA is for educational and research purposes only. Not financial advice.</div>'
+                f'</body></html>')
+        try:
+            from weasyprint import HTML
+            buf = io.BytesIO(HTML(string=html).write_pdf()); buf.seek(0)
+            return send_file(buf, mimetype='application/pdf', download_name=f'SENECA-{data["ticker"]}-report.pdf', as_attachment=True)
+        except ImportError:
+            buf = io.BytesIO(html.encode()); buf.seek(0)
+            return send_file(buf, mimetype='text/html', download_name=f'SENECA-{data["ticker"]}-report.html', as_attachment=True)
+    except Exception as e: return jsonify({"error":str(e)}), 500
+
+# ── HTML ──────────────────────────────────────────────────────────────────────
+def render_app(sub=False, email="", toast=""):
+    stripe_pk = STRIPE_PUBLISHABLE_KEY
+    safe_toast = toast.replace('"', '&quot;')
+    toast_js = f'toast("{safe_toast}");' if toast else ""
+    return f"""<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1"/>
+<title>SENECA ◆ Intrinsic Value Oracle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&family=Chakra+Petch:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+{"<script src='https://js.stripe.com/v3/'></script>" if stripe_pk else ""}
+<style>
+*{{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}}
+:root{{
+  --void:#000;--obsidian:#060606;--carbon:#0a0a0a;--graphite:#0f0f0f;--slate:#141414;--slate2:#1a1a1a;
+  --line:#181818;--line2:#222;--line3:#2c2c2c;
+  --gold:#c8901a;--gold2:#e8aa34;--gold3:#f0b840;--gold-dim:#6a4d12;
+  --jade:#2ea043;--jade2:#3fbf55;--blood:#c4302b;--blood2:#e0463f;
+  --w1:#fff;--w2:#9a9a9a;--w3:#525252;--w4:#2e2e2e;--dim:#525252;
+  --mono:'JetBrains Mono','SF Mono',monospace;
+  --disp:'Space Grotesk','Chakra Petch',system-ui,sans-serif;
+  --num:'Chakra Petch','Space Grotesk',monospace;
+  --safe-b:env(safe-area-inset-bottom,0px);--safe-t:env(safe-area-inset-top,0px);
+}}
+html,body{{min-height:100%;background:var(--void);color:var(--w1);font-family:var(--disp);overscroll-behavior:none;-webkit-font-smoothing:antialiased}}
+body{{position:relative}}
+body::before{{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,.008) 2px,rgba(255,255,255,.008) 3px);pointer-events:none;z-index:200}}
+::-webkit-scrollbar{{width:0;display:none}}
+*{{scrollbar-width:none}}
+.hidden{{display:none!important}}
+a{{color:var(--gold);cursor:pointer;text-decoration:none}}
+
+/* ── COMMAND BAR ── */
+.cmd-bar{{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;padding-top:max(12px,var(--safe-t));border-bottom:0.5px solid var(--line);background:linear-gradient(180deg,var(--carbon),var(--void));position:sticky;top:0;z-index:100}}
+.cmd-id{{display:flex;align-items:center;gap:11px;cursor:pointer}}
+.cmd-gem{{width:24px;height:24px;background:linear-gradient(135deg,var(--gold),var(--gold3));transform:rotate(45deg);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 14px rgba(200,144,26,.35);position:relative}}
+.cmd-gem::after{{content:'◆';transform:rotate(-45deg);font-size:.46rem;color:#000;font-weight:900;position:absolute}}
+.cmd-name{{font-size:.86rem;font-weight:300;color:var(--w1);letter-spacing:.42em}}
+.cmd-acts{{display:flex;gap:6px;align-items:center}}
+.cmd-clock{{font-family:var(--mono);font-size:.5rem;color:var(--w3);letter-spacing:.08em;margin-right:4px}}
+.cmd-btn{{height:32px;padding:0 12px;border-radius:8px;font-family:var(--mono);font-size:.54rem;letter-spacing:.07em;display:flex;align-items:center;cursor:pointer;border:0.5px solid var(--line2);background:transparent;color:var(--w2);transition:all .15s}}
+.cmd-btn:active{{opacity:.7}}
+.cmd-btn-pro{{border-color:var(--gold-dim);color:var(--gold);background:rgba(200,144,26,.06)}}
+.cmd-btn-pro:hover{{background:rgba(200,144,26,.12)}}
+
+/* ── INPUT STAGE ── */
+.input-stage{{padding:24px 18px 6px}}
+.input-eyebrow{{text-align:center;font-family:var(--mono);font-size:.5rem;color:var(--w3);letter-spacing:.24em;margin-bottom:13px}}
+.input-field{{background:var(--obsidian);border:0.5px solid var(--line2);border-radius:18px;padding:16px 18px;position:relative;overflow:hidden;transition:border-color .2s}}
+.input-field::before{{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold-dim),transparent)}}
+.input-field:focus-within{{border-color:var(--gold-dim)}}
+.input-el{{width:100%;background:transparent;border:none;outline:none;font-size:2.1rem;font-weight:300;color:var(--w1);letter-spacing:.2em;text-align:center;line-height:1.1;font-family:var(--disp);text-transform:uppercase;caret-color:var(--gold)}}
+.input-el::placeholder{{color:var(--w4);font-size:1.1rem;letter-spacing:.06em;text-transform:none}}
+.input-go{{margin-top:11px;width:100%;height:50px;background:linear-gradient(135deg,var(--gold),var(--gold3));border:none;border-radius:13px;font-family:var(--mono);font-size:.7rem;font-weight:700;color:#000;letter-spacing:.16em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .15s}}
+.input-go:active{{opacity:.82}}
+.input-go:disabled{{background:var(--slate);color:var(--w3);cursor:default}}
+
+/* chips */
+.chip-strip{{display:flex;gap:6px;padding:13px 18px 4px;overflow-x:auto}}
+.chip{{height:30px;padding:0 12px;background:var(--carbon);border:0.5px solid var(--line);border-radius:8px;font-family:var(--mono);font-size:.54rem;color:var(--w3);white-space:nowrap;letter-spacing:.05em;display:flex;align-items:center;cursor:pointer;flex-shrink:0;gap:5px;transition:all .15s}}
+.chip:active,.chip:hover{{border-color:var(--gold-dim);color:var(--gold)}}
+.chip-tick{{color:var(--jade);font-size:.4rem}}
+
+/* status line */
+.status-line{{font-family:var(--mono);font-size:.52rem;color:var(--w3);text-align:center;padding:8px 18px;letter-spacing:.04em;min-height:26px}}
+
+/* ── SPINNER ── */
+.spinner{{text-align:center;padding:46px 0;display:none}}
+.spinner.on{{display:block}}
+.spin-ring{{width:38px;height:38px;border:2px solid var(--line2);border-top-color:var(--gold);border-radius:50%;display:inline-block;animation:spin 0.9s linear infinite}}
+@keyframes spin{{to{{transform:rotate(360deg)}}}}
+.spin-txt{{font-family:var(--mono);font-size:.56rem;color:var(--w3);letter-spacing:.1em;margin-top:13px}}
+
+/* ── DIVIDER ── */
+.divider{{display:flex;align-items:center;gap:12px;padding:14px 20px 14px}}
+.divider-line{{flex:1;height:0.5px;background:linear-gradient(90deg,transparent,var(--line3))}}
+.divider-line.r{{background:linear-gradient(90deg,var(--line3),transparent)}}
+.divider-txt{{font-family:var(--mono);font-size:.48rem;color:var(--w3);letter-spacing:.2em}}
+
+/* ── VERDICT STAGE (hero) ── */
+.verdict-stage{{margin:0 14px;background:radial-gradient(ellipse at top,var(--graphite),var(--obsidian));border:0.5px solid var(--line2);border-radius:24px;overflow:hidden;position:relative}}
+.vs-glow{{position:absolute;top:0;left:0;right:0;height:100px;pointer-events:none}}
+.vs-glow.up{{background:radial-gradient(ellipse at top,rgba(46,160,67,.14),transparent 70%)}}
+.vs-glow.down{{background:radial-gradient(ellipse at top,rgba(196,48,43,.14),transparent 70%)}}
+.vs-glow.fair{{background:radial-gradient(ellipse at top,rgba(200,144,26,.12),transparent 70%)}}
+.vs-strip{{height:3px}}
+.vs-strip.up{{background:linear-gradient(90deg,transparent,var(--jade),transparent)}}
+.vs-strip.down{{background:linear-gradient(90deg,transparent,var(--blood),transparent)}}
+.vs-strip.fair{{background:linear-gradient(90deg,transparent,var(--gold),transparent)}}
+.vs-co{{text-align:center;padding:22px 20px 0;font-family:var(--disp);font-size:.92rem;font-weight:500;color:var(--w1);letter-spacing:.04em}}
+.vs-sector{{text-align:center;font-family:var(--mono);font-size:.5rem;color:var(--w3);letter-spacing:.14em;margin-top:6px}}
+
+/* COMPOSITE — the absolute hero */
+.vs-comp-label{{text-align:center;font-family:var(--mono);font-size:.52rem;color:var(--gold);letter-spacing:.2em;margin-top:22px}}
+.vs-comp{{text-align:center;font-family:var(--num);font-size:3.4rem;font-weight:500;color:var(--gold3);line-height:1.05;letter-spacing:.01em;margin:10px 0 6px;text-shadow:0 0 44px rgba(240,184,64,.25)}}
+.vs-comp-sub{{text-align:center;font-family:var(--mono);font-size:.5rem;color:var(--w3);letter-spacing:.12em;margin-bottom:10px}}
+.vs-margin{{text-align:center;font-family:var(--mono);font-size:.78rem;letter-spacing:.06em;margin-bottom:20px;font-weight:700}}
+.vs-margin.up{{color:var(--jade)}}.vs-margin.down{{color:var(--blood)}}.vs-margin.fair{{color:var(--gold)}}
+
+/* verdict sentence */
+.vs-verdict{{text-align:center;padding:18px 24px;border-top:0.5px solid var(--line);border-bottom:0.5px solid var(--line)}}
+.vs-verdict.up{{background:rgba(46,160,67,.05)}}.vs-verdict.down{{background:rgba(196,48,43,.05)}}.vs-verdict.fair{{background:rgba(200,144,26,.05)}}
+.vs-verdict-main{{font-family:var(--disp);font-size:1.08rem;font-weight:600;color:var(--w1);letter-spacing:.04em;line-height:1.3;text-transform:uppercase}}
+.vs-verdict-main .hl-up{{color:var(--jade2)}}.vs-verdict-main .hl-down{{color:var(--blood2)}}.vs-verdict-main .hl-fair{{color:var(--gold2)}}
+.vs-verdict-sub{{font-family:var(--disp);font-size:.8rem;color:var(--w2);font-weight:400;margin-top:8px;line-height:1.6}}
+
+/* current price reference row */
+.vs-stats{{display:flex;border-bottom:0.5px solid var(--line)}}
+.vs-stat{{flex:1;text-align:center;padding:13px 8px}}
+.vs-stat + .vs-stat{{border-left:0.5px solid var(--line)}}
+.vs-stat-lbl{{font-family:var(--mono);font-size:.44rem;color:var(--w3);letter-spacing:.1em;margin-bottom:5px}}
+.vs-stat-val{{font-size:1.1rem;font-weight:500;color:var(--w1);font-family:var(--num);letter-spacing:.02em}}
+.vs-stat-val.up{{color:var(--jade)}}.vs-stat-val.down{{color:var(--blood)}}
+
+/* 52-week range */
+.vs-range{{padding:13px 20px 16px;border-bottom:0.5px solid var(--line)}}
+.vs-range-ends{{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.5rem;margin-bottom:8px}}
+.vs-range-lo{{color:var(--blood)}}.vs-range-hi{{color:var(--jade)}}.vs-range-mid{{color:var(--w3);letter-spacing:.08em}}
+.vs-track{{height:2px;background:var(--line3);border-radius:1px;position:relative}}
+.vs-fill{{position:absolute;left:0;top:0;height:2px;background:var(--gold);border-radius:1px;transition:width .9s cubic-bezier(.4,0,.2,1)}}
+.vs-pin{{position:absolute;top:50%;transform:translate(-50%,-50%);width:9px;height:9px;background:var(--gold);border-radius:50%;border:1.5px solid var(--void);transition:left .9s cubic-bezier(.4,0,.2,1)}}
+
+/* ── MODEL MATRIX ── */
+.matrix-head{{display:flex;justify-content:space-between;padding:12px 20px 8px;font-family:var(--mono);font-size:.46rem;color:var(--w3);letter-spacing:.14em}}
+.mx-row{{display:flex;align-items:center;padding:10px 20px;border-top:0.5px solid var(--line);position:relative;overflow:hidden}}
+.mx-bar{{position:absolute;left:0;top:0;bottom:0;border-left:1.5px solid var(--jade);background:rgba(46,160,67,.05);transition:width .8s ease}}
+.mx-bar.down{{border-left-color:var(--blood);background:rgba(196,48,43,.05)}}
+.mx-bar.fair{{border-left-color:var(--gold);background:rgba(200,144,26,.05)}}
+.mx-bar.na{{border-left-color:var(--w4);background:rgba(120,120,120,.03)}}
+.mx-name{{flex:1;font-family:var(--mono);font-size:.55rem;color:var(--w2);letter-spacing:.04em;z-index:1}}
+.mx-val{{font-size:1.02rem;font-weight:500;font-family:var(--num);z-index:1;margin-right:11px;letter-spacing:.01em}}
+.mx-val.up{{color:var(--jade)}}.mx-val.down{{color:var(--blood)}}.mx-val.fair{{color:var(--gold)}}.mx-val.na{{color:var(--w3)}}
+.mx-delta{{font-family:var(--mono);font-size:.5rem;width:52px;text-align:right;z-index:1}}
+.mx-delta.up{{color:var(--jade)}}.mx-delta.down{{color:var(--blood)}}.mx-delta.fair{{color:var(--gold)}}.mx-delta.na{{color:var(--w3)}}
+
+/* ── AI CARDS ── */
+.ai-block{{margin:13px 14px 0;background:var(--carbon);border:0.5px solid var(--line2);border-radius:18px;overflow:hidden}}
+.ai-head{{display:flex;align-items:center;gap:9px;padding:13px 18px 10px;border-bottom:0.5px solid var(--line)}}
+.ai-ic{{width:22px;height:22px;border-radius:6px;background:rgba(200,144,26,.12);border:0.5px solid var(--gold-dim);display:flex;align-items:center;justify-content:center;font-size:.6rem;color:var(--gold)}}
+.ai-ic.jade{{background:rgba(46,160,67,.1);border-color:rgba(46,160,67,.3);color:var(--jade2)}}
+.ai-title{{font-family:var(--mono);font-size:.54rem;color:var(--w2);letter-spacing:.12em}}
+.ai-body{{padding:16px 18px;font-family:var(--disp);font-size:.92rem;font-weight:400;color:var(--w2);line-height:1.85;letter-spacing:.01em}}
+.ai-loading{{display:flex;align-items:center;gap:7px;padding:14px 18px}}
+.dot{{width:5px;height:5px;border-radius:50%;background:var(--gold);animation:pulse 1.2s ease-in-out infinite}}
+.dot:nth-child(2){{animation-delay:.2s}}.dot:nth-child(3){{animation-delay:.4s}}
+@keyframes pulse{{0%,100%{{opacity:.2}}50%{{opacity:1}}}}
+.ai-loading-txt{{font-family:var(--mono);font-size:.52rem;color:var(--w3);letter-spacing:.06em;margin-left:5px}}
+
+/* ── HEALTH CARD ── */
+.health-block{{margin:13px 14px 0;background:var(--carbon);border:0.5px solid var(--line2);border-radius:18px;overflow:hidden}}
+.health-top{{display:flex;align-items:center;justify-content:space-between;padding:15px 18px 12px}}
+.health-title{{font-family:var(--mono);font-size:.54rem;color:var(--w2);letter-spacing:.12em}}
+.health-gr{{display:flex;align-items:center;gap:11px}}
+.health-score{{font-size:1.7rem;font-weight:500;color:var(--w1);font-family:var(--num)}}
+.health-score small{{font-size:.7rem;color:var(--w3)}}
+.health-grade{{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:700;font-family:var(--num)}}
+.health-grade.A{{background:rgba(46,160,67,.16);border:0.5px solid rgba(46,160,67,.5);color:var(--jade2)}}
+.health-grade.B{{background:rgba(63,191,85,.1);border:0.5px solid rgba(63,191,85,.4);color:var(--jade2)}}
+.health-grade.C{{background:rgba(200,144,26,.13);border:0.5px solid rgba(200,144,26,.45);color:var(--gold2)}}
+.health-grade.D{{background:rgba(196,48,43,.12);border:0.5px solid rgba(196,48,43,.4);color:var(--blood2)}}
+.health-grade.F{{background:rgba(196,48,43,.2);border:0.5px solid rgba(196,48,43,.55);color:var(--blood2)}}
+.health-bar{{height:4px;margin:0 18px 13px;background:var(--line3);border-radius:2px;overflow:hidden}}
+.health-bar-fill{{height:100%;border-radius:2px;transition:width 1s cubic-bezier(.4,0,.2,1)}}
+.health-bar-fill.A,.health-bar-fill.B{{background:linear-gradient(90deg,var(--jade),var(--jade2))}}
+.health-bar-fill.C{{background:linear-gradient(90deg,var(--gold),var(--gold2))}}
+.health-bar-fill.D,.health-bar-fill.F{{background:linear-gradient(90deg,var(--blood),var(--blood2))}}
+.health-grid{{display:grid;grid-template-columns:1fr 1fr;gap:0.5px;background:var(--line);border-top:0.5px solid var(--line)}}
+.hg-item{{background:var(--carbon);padding:7px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px}}
+.hg-k{{font-family:var(--mono);font-size:.5rem;color:var(--w3);letter-spacing:.03em}}
+.hg-v{{font-family:var(--mono);font-size:.54rem;color:var(--w1);text-align:right}}
+.health-flags{{display:flex;flex-wrap:wrap;gap:5px;padding:11px 18px}}
+.health-flag{{background:rgba(196,48,43,.1);border:0.5px solid rgba(196,48,43,.3);border-radius:20px;padding:3px 10px;font-family:var(--mono);font-size:.48rem;color:var(--blood2);letter-spacing:.03em}}
+
+/* action buttons */
+.actions{{display:flex;gap:7px;margin:13px 14px 0}}
+.act-btn{{flex:1;height:42px;background:var(--carbon);border:0.5px solid var(--line2);border-radius:11px;color:var(--w2);font-family:var(--mono);font-size:.54rem;letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s}}
+.act-btn:active{{opacity:.7}}
+.act-btn.saved{{border-color:var(--gold-dim);color:var(--gold);background:rgba(200,144,26,.06)}}
+
+/* ── SECTION RAILS ── */
+.rail-head{{display:flex;align-items:center;justify-content:space-between;padding:22px 20px 11px}}
+.rail-title{{font-family:var(--mono);font-size:.5rem;color:var(--w3);letter-spacing:.18em}}
+.rail-act{{font-family:var(--mono);font-size:.46rem;color:var(--gold-dim);letter-spacing:.07em;display:flex;align-items:center;gap:4px;cursor:pointer}}
+.rail{{display:flex;gap:7px;padding:0 18px 4px;overflow-x:auto}}
+.rail-card{{flex-shrink:0;background:var(--carbon);border:0.5px solid var(--line);border-radius:13px;padding:11px 14px;min-width:84px;cursor:pointer;position:relative;overflow:hidden;transition:border-color .15s}}
+.rail-card:active{{border-color:var(--gold-dim)}}
+.rail-card::after{{content:'';position:absolute;bottom:0;left:0;right:0;height:1.5px;background:var(--line2)}}
+.rail-card.up::after{{background:var(--jade)}}.rail-card.dn::after{{background:var(--blood)}}
+.rail-sym{{font-family:var(--mono);font-size:.56rem;color:var(--w2);letter-spacing:.06em;margin-bottom:5px}}
+.rail-px{{font-size:.98rem;font-weight:500;color:var(--w1);font-family:var(--num);letter-spacing:.01em}}
+.rail-chg{{font-family:var(--mono);font-size:.48rem;margin-top:3px}}
+.rail-shimmer{{display:inline-block;background:var(--slate);border-radius:3px;animation:shimmer 1.3s ease-in-out infinite}}
+@keyframes shimmer{{0%,100%{{opacity:.3}}50%{{opacity:.7}}}}
+.up{{color:var(--jade)}}.dn{{color:var(--blood)}}
+.rail-rm{{position:absolute;top:6px;right:7px;font-size:.6rem;color:var(--w3);cursor:pointer;line-height:1;padding:2px}}
+.rail-rm:hover{{color:var(--blood)}}
+
+/* watchlist analyze hint */
+.wl-empty-note{{font-size:.72rem;color:var(--w3);font-style:italic;padding:0 20px 4px;line-height:1.6}}
+
+/* ── MASTERS ── */
+.masters{{display:flex;gap:8px;padding:0 18px 4px;overflow-x:auto}}
+.master{{flex-shrink:0;width:128px;background:var(--carbon);border:0.5px solid var(--line);border-radius:15px;padding:14px 13px 13px;cursor:pointer;transition:border-color .15s}}
+.master:active{{border-color:var(--gold-dim)}}
+.master-top{{display:flex;align-items:center;gap:10px;margin-bottom:10px}}
+.master-medal{{width:38px;height:38px;border-radius:50%;background:radial-gradient(circle at 35% 30%,var(--slate2),var(--obsidian));border:0.5px solid var(--gold-dim);display:flex;align-items:center;justify-content:center;font-size:.92rem;font-weight:300;color:var(--gold);font-family:var(--disp);flex-shrink:0}}
+.master-name{{font-family:var(--disp);font-size:.78rem;color:var(--w1);line-height:1.25;font-weight:600}}
+.master-years{{font-family:var(--mono);font-size:.42rem;color:var(--w3);letter-spacing:.05em;margin-top:2px}}
+.master-tag{{font-family:var(--mono);font-size:.44rem;color:var(--gold-dim);letter-spacing:.05em;margin-bottom:8px}}
+.master-bio{{font-family:var(--disp);font-size:.72rem;color:var(--w2);line-height:1.65;font-weight:400}}
+.master-quote{{font-family:var(--disp);font-size:.72rem;color:var(--gold);line-height:1.6;margin-top:10px;padding-top:10px;border-top:0.5px solid var(--line)}}
+
+/* ── ABOUT PANE ── */
+.about-pane{{padding:20px 18px 30px}}
+.about-gem-wrap{{text-align:center;margin:10px 0 22px}}
+.about-gem{{width:56px;height:56px;background:linear-gradient(135deg,var(--gold),var(--gold3));transform:rotate(45deg);display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 40px rgba(200,144,26,.25);animation:gem-spin 14s linear infinite}}
+.about-gem::after{{content:'◆';transform:rotate(-45deg);font-size:.85rem;color:#000;font-weight:900;animation:gem-spin-i 14s linear infinite}}
+@keyframes gem-spin{{0%{{transform:rotate(45deg)}}100%{{transform:rotate(405deg)}}}}
+@keyframes gem-spin-i{{0%{{transform:rotate(-45deg)}}100%{{transform:rotate(-405deg)}}}}
+.about-title{{text-align:center;font-size:1.4rem;font-weight:300;color:var(--gold3);letter-spacing:.3em;margin-bottom:6px}}
+.about-tag{{text-align:center;font-family:var(--mono);font-size:.5rem;color:var(--w3);letter-spacing:.12em;margin-bottom:20px}}
+.about-body{{font-family:var(--disp);font-size:.92rem;color:var(--w2);line-height:1.85;font-weight:400;margin-bottom:20px;text-align:center}}
+.formula-card{{background:var(--carbon);border:0.5px solid var(--line);border-left:2px solid var(--gold-dim);border-radius:0 11px 11px 0;padding:12px 15px;margin-bottom:8px}}
+.formula-name{{font-size:.85rem;color:var(--gold2);font-weight:500;margin-bottom:3px;letter-spacing:.03em}}
+.formula-eq{{font-family:var(--mono);font-size:.56rem;color:var(--jade2);margin-bottom:4px}}
+.formula-desc{{font-size:.74rem;color:var(--w3);font-style:italic;line-height:1.55}}
+.about-pricing{{background:radial-gradient(ellipse at top,var(--graphite),var(--obsidian));border:0.5px solid var(--gold-dim);border-radius:18px;padding:22px 20px;text-align:center;margin:22px 0 14px}}
+.about-price{{font-size:2.4rem;font-weight:300;color:var(--gold3);line-height:1}}
+.about-price small{{font-size:.8rem;color:var(--w3)}}
+.about-price-note{{font-family:var(--mono);font-size:.5rem;color:var(--w3);letter-spacing:.08em;margin:8px 0 16px}}
+.about-sub-btn{{width:100%;height:48px;background:linear-gradient(135deg,var(--gold),var(--gold3));border:none;border-radius:12px;font-family:var(--mono);font-size:.64rem;font-weight:700;color:#000;letter-spacing:.12em;cursor:pointer}}
+.disc{{background:var(--carbon);border:0.5px solid var(--line);border-radius:11px;padding:13px 15px;margin-top:14px}}
+.disc p{{font-size:.62rem;color:var(--w3);font-style:italic;line-height:1.7}}
+
+/* ── DOCK ── */
+.dock{{position:sticky;bottom:0;display:flex;margin:14px 14px 0;margin-bottom:max(14px,var(--safe-b));background:rgba(10,10,10,.96);backdrop-filter:blur(20px);border:0.5px solid var(--line2);border-radius:16px;padding:6px;gap:4px;z-index:90}}
+.dock-item{{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0;border-radius:11px;cursor:pointer;min-height:50px;justify-content:center;transition:background .15s}}
+.dock-item.on{{background:var(--slate)}}
+.dock-ic{{font-size:1.05rem;line-height:1;color:var(--w3)}}
+.dock-lb{{font-family:var(--mono);font-size:.42rem;color:var(--w3);letter-spacing:.06em}}
+.dock-item.on .dock-ic,.dock-item.on .dock-lb{{color:var(--gold)}}
+
+/* panes */
+.pane{{min-height:50vh}}
+
+/* ── TOAST ── */
+.toast{{position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(20px);background:var(--slate);border:0.5px solid var(--gold-dim);border-radius:11px;padding:11px 18px;font-family:var(--mono);font-size:.58rem;color:var(--gold2);letter-spacing:.04em;opacity:0;pointer-events:none;transition:all .3s;z-index:300;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis}}
+.toast.on{{opacity:1;transform:translateX(-50%) translateY(0)}}
+
+/* ── MODALS ── */
+.modal{{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;z-index:400;padding:20px}}
+.modal.on{{display:flex}}
+.modal-card{{background:var(--graphite);border:0.5px solid var(--line2);border-radius:20px;padding:24px 22px;width:100%;max-width:340px;position:relative}}
+.modal-card::before{{content:'';position:absolute;top:0;left:20px;right:20px;height:1px;background:linear-gradient(90deg,transparent,var(--gold-dim),transparent)}}
+.modal-title{{font-size:1.2rem;font-weight:300;color:var(--gold3);letter-spacing:.08em;text-align:center;margin-bottom:5px}}
+.modal-sub{{font-family:var(--mono);font-size:.52rem;color:var(--w3);text-align:center;letter-spacing:.06em;margin-bottom:18px}}
+.modal-input{{width:100%;height:46px;background:var(--obsidian);border:0.5px solid var(--line2);border-radius:11px;padding:0 15px;color:var(--w1);font-family:var(--mono);font-size:.72rem;outline:none;margin-bottom:10px;transition:border-color .15s}}
+.modal-input:focus{{border-color:var(--gold-dim)}}
+.modal-input::placeholder{{color:var(--w4)}}
+.btn-big{{width:100%;height:48px;background:linear-gradient(135deg,var(--gold),var(--gold3));border:none;border-radius:12px;font-family:var(--mono);font-size:.62rem;font-weight:700;color:#000;letter-spacing:.1em;cursor:pointer;margin-top:6px}}
+.btn-ghost-modal{{width:100%;height:42px;background:transparent;border:0.5px solid var(--line2);border-radius:11px;color:var(--w2);font-family:var(--mono);font-size:.56rem;letter-spacing:.06em;cursor:pointer;margin-top:8px}}
+.modal-switch{{text-align:center;font-size:.74rem;color:var(--w3);font-style:italic;margin-top:14px}}
+.modal-err{{font-family:var(--mono);font-size:.5rem;color:var(--blood2);text-align:center;min-height:16px;margin-bottom:6px;letter-spacing:.03em}}
+.remember-row{{display:flex;align-items:center;gap:9px;margin:4px 2px 12px;cursor:pointer;font-family:var(--disp);font-size:.78rem;color:var(--w2)}}
+.remember-row input{{width:16px;height:16px;accent-color:var(--gold);cursor:pointer;flex-shrink:0}}
+.modal-acct-email{{font-family:var(--mono);font-size:.66rem;color:var(--gold2);text-align:center;letter-spacing:.04em;margin-bottom:6px}}
+.modal-acct-status{{font-family:var(--mono);font-size:.5rem;text-align:center;letter-spacing:.08em;margin-bottom:18px}}
+.modal-acct-status.pro{{color:var(--jade2)}}.modal-acct-status.free{{color:var(--w3)}}
+
+/* paywall */
+.paywall-feats{{margin:14px 0 18px}}
+.pf-row{{display:flex;align-items:center;gap:9px;padding:6px 0;font-size:.8rem;color:var(--w2)}}
+.pf-check{{color:var(--jade2);font-size:.7rem}}
+.modal-price{{text-align:center;margin:8px 0 16px}}
+.modal-price-num{{font-size:2.2rem;font-weight:300;color:var(--gold3);line-height:1}}
+.modal-price-per{{font-family:var(--mono);font-size:.5rem;color:var(--w3);letter-spacing:.06em;margin-top:5px}}
+</style>
+</head>
+<body>
+<!-- BODY CONTENT INJECTED IN PART 2 -->
+<div class="cmd-bar">
+  <div class="cmd-id" onclick="goHome()">
+    <div class="cmd-gem"></div>
+    <div class="cmd-name">SENECA</div>
+  </div>
+  <div class="cmd-acts">
+    <div class="cmd-clock" id="cmd-clock"></div>
+    <button class="cmd-btn hidden" id="btn-login" onclick="openModal('login')">SIGN IN</button>
+    <button class="cmd-btn hidden" id="btn-acct" onclick="openModal('acct')">◆ ACCT</button>
+    <button class="cmd-btn cmd-btn-pro" id="btn-sub" onclick="clickSubscribe()">✦ PRO</button>
+  </div>
+</div>
+
+<div id="pane-oracle" class="pane">
+  <div class="input-stage">
+    <div class="input-eyebrow">— ENTER SYMBOL TO VALUE —</div>
+    <div class="input-field">
+      <input id="search" class="input-el" type="text" placeholder="AAPL · MSFT · TSLA" maxlength="12" autocomplete="off" spellcheck="false"/>
+    </div>
+    <button id="btn-go" class="input-go" onclick="doAnalyze()"><span style="font-size:.62rem">◆</span> CONSULT THE ORACLE</button>
+  </div>
+
+  <div class="chip-strip">
+    <div class="chip" onclick="setQ('AAPL')"><span class="chip-tick">●</span>AAPL</div>
+    <div class="chip" onclick="setQ('NVDA')"><span class="chip-tick">●</span>NVDA</div>
+    <div class="chip" onclick="setQ('MSFT')"><span class="chip-tick">●</span>MSFT</div>
+    <div class="chip" onclick="setQ('TSLA')"><span class="chip-tick">●</span>TSLA</div>
+    <div class="chip" onclick="setQ('GOOGL')"><span class="chip-tick">●</span>GOOGL</div>
+    <div class="chip" onclick="setQ('AMZN')"><span class="chip-tick">●</span>AMZN</div>
+    <div class="chip" onclick="setQ('KO')"><span class="chip-tick">●</span>KO</div>
+    <div class="chip" onclick="setQ('BRK-B')"><span class="chip-tick">●</span>BRK-B</div>
+  </div>
+
+  <div class="status-line" id="status">Awaiting symbol · first lookup free</div>
+
+  <div class="spinner" id="spinner">
+    <div class="spin-ring"></div>
+    <div class="spin-txt">CONSULTING THE ORACLE…</div>
+  </div>
+
+  <div id="results" class="hidden"></div>
+</div>
+
+<div id="pane-watch" class="pane hidden">
+  <div class="rail-head">
+    <div class="rail-title">◈ LIVE WATCHLIST</div>
+    <div class="rail-act" id="wl-refresh" onclick="refreshWL()">↻ SYNC</div>
+  </div>
+  <div class="wl-empty-note" id="wl-note"></div>
+  <div class="rail" id="wl-rail" style="flex-wrap:wrap;padding-bottom:8px"></div>
+
+  <div class="rail-head"><div class="rail-title">◈ TRENDING NOW</div></div>
+  <div class="rail" id="trend-rail" style="flex-wrap:wrap;padding-bottom:8px"></div>
+</div>
+
+<div id="pane-minds" class="pane hidden">
+  <div class="rail-head"><div class="rail-title">◈ MINDS BEHIND THE MODELS</div></div>
+  <div id="minds-list" style="padding:0 14px 8px"></div>
+</div>
+
+<div id="pane-about" class="pane hidden">
+  <div class="about-pane">
+    <div class="about-gem-wrap"><div class="about-gem"></div></div>
+    <div class="about-title">SENECA</div>
+    <div class="about-tag">INTRINSIC VALUE ORACLE</div>
+    <div class="about-body">Named for the Stoic philosopher and the Seneca Nation — keepers of wisdom. This oracle applies seven time-tested valuation frameworks to reveal what a company is truly worth beneath the market's noise.</div>
+
+    <div class="formula-card"><div class="formula-name">Graham Number</div><div class="formula-eq">√( 22.5 × EPS × Book Value )</div><div class="formula-desc">Ben Graham's bedrock — the geometric mean of earnings and asset value.</div></div>
+    <div class="formula-card"><div class="formula-name">Graham Growth</div><div class="formula-eq">EPS × (8.5 + 2g) × 4.4 / AAA yield</div><div class="formula-desc">Extends Graham for growth relative to bond yields.</div></div>
+    <div class="formula-card"><div class="formula-name">Buffett DCF</div><div class="formula-eq">10yr EPS @ 9% · 15× terminal</div><div class="formula-desc">Discounts a decade of projected earnings to present value.</div></div>
+    <div class="formula-card"><div class="formula-name">Peter Lynch PEG</div><div class="formula-eq">EPS × growth% (PEG = 1)</div><div class="formula-desc">A fair P/E equals the earnings growth rate.</div></div>
+    <div class="formula-card"><div class="formula-name">Simons Quant</div><div class="formula-eq">ROE/PE × (1/PB) × momentum</div><div class="formula-desc">Renaissance-style multi-factor quality + momentum signal.</div></div>
+    <div class="formula-card"><div class="formula-name">Free Cash Flow DCF</div><div class="formula-eq">10yr FCF @ 10% · 2.5% terminal</div><div class="formula-desc">Pure cash generation discounted to today.</div></div>
+    <div class="formula-card"><div class="formula-name">Gordon Growth DDM</div><div class="formula-eq">D1 ÷ (CAPM rate − div growth)</div><div class="formula-desc">For dividend-payers — values the future dividend stream.</div></div>
+
+    <div class="about-pricing">
+      <div class="about-price">$3.99<small>/mo</small></div>
+      <div class="about-price-note">UNLIMITED LOOKUPS · CANCEL ANYTIME</div>
+      <button class="about-sub-btn" onclick="clickSubscribe()">✦ UNLOCK SENECA PRO</button>
+    </div>
+    <div class="disc"><p>✦ Seneca is for educational and research purposes only. Nothing here constitutes financial advice. Always conduct your own due diligence.</p></div>
+  </div>
+</div>
+
+<div class="dock">
+  <div class="dock-item on" id="dock-oracle" onclick="switchPane('oracle')"><i class="dock-ic">◆</i><div class="dock-lb">ORACLE</div></div>
+  <div class="dock-item" id="dock-watch" onclick="switchPane('watch')"><i class="dock-ic">◈</i><div class="dock-lb">WATCH</div></div>
+  <div class="dock-item" id="dock-minds" onclick="switchPane('minds')"><i class="dock-ic">✦</i><div class="dock-lb">MINDS</div></div>
+  <div class="dock-item" id="dock-about" onclick="switchPane('about')"><i class="dock-ic">◇</i><div class="dock-lb">ABOUT</div></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal" id="modal-pay">
+  <div class="modal-card">
+    <div class="modal-title">✦ Unlock Seneca Pro</div>
+    <div class="modal-sub">YOUR FREE LOOKUP IS USED</div>
+    <div class="paywall-feats">
+      <div class="pf-row"><span class="pf-check">✓</span> Unlimited valuations</div>
+      <div class="pf-row"><span class="pf-check">✓</span> AI analysis & financial forensics</div>
+      <div class="pf-row"><span class="pf-check">✓</span> Live watchlist with real-time prices</div>
+      <div class="pf-row"><span class="pf-check">✓</span> All seven valuation models</div>
+    </div>
+    <div class="modal-price"><div class="modal-price-num">$3.99</div><div class="modal-price-per">PER MONTH · CANCEL ANYTIME</div></div>
+    <button class="btn-big" id="pay-btn" onclick="launchStripe()">✦ SUBSCRIBE NOW</button>
+    <button class="btn-ghost-modal" onclick="closeModal('modal-pay')">Maybe later</button>
+  </div>
+</div>
+
+<div class="modal" id="modal-signup">
+  <div class="modal-card">
+    <div class="modal-title">Create Account</div>
+    <div class="modal-sub">SECURE YOUR ORACLE ACCESS</div>
+    <div class="modal-err" id="signup-err"></div>
+    <input class="modal-input" id="signup-email" type="email" placeholder="Email" autocomplete="email"/>
+    <input class="modal-input" id="signup-pw" type="password" placeholder="Password" autocomplete="new-password"/>
+    <button class="btn-big" onclick="doSignup()">CREATE ACCOUNT & SUBSCRIBE</button>
+    <button class="btn-ghost-modal" onclick="closeModal('modal-signup')">Cancel</button>
+    <div class="modal-switch">Already have an account? <a onclick="switchModal('modal-signup','modal-login')">Sign in</a></div>
+  </div>
+</div>
+
+<div class="modal" id="modal-login">
+  <div class="modal-card">
+    <div class="modal-title">Welcome Back</div>
+    <div class="modal-sub">SIGN IN TO YOUR ORACLE</div>
+    <div class="modal-err" id="login-err"></div>
+    <input class="modal-input" id="login-email" type="email" placeholder="Email" autocomplete="email"/>
+    <input class="modal-input" id="login-pw" type="password" placeholder="Password" autocomplete="current-password"/>
+    <label class="remember-row"><input type="checkbox" id="login-remember" checked/><span>Keep me signed in for 30 days</span></label>
+    <button class="btn-big" onclick="doLogin()">SIGN IN</button>
+    <button class="btn-ghost-modal" onclick="closeModal('modal-login')">Cancel</button>
+    <div class="modal-switch">No account yet? <a onclick="switchModal('modal-login','modal-signup')">Create one</a></div>
+  </div>
+</div>
+
+<div class="modal" id="modal-acct">
+  <div class="modal-card">
+    <div class="modal-title">Account</div>
+    <div class="modal-acct-email" id="acct-email"></div>
+    <div class="modal-acct-status" id="acct-status"></div>
+    <button class="btn-big" id="acct-sub-btn" onclick="closeModal('modal-acct');launchStripe()" style="display:none">✦ SUBSCRIBE NOW — $3.99/mo</button>
+    <button class="btn-ghost-modal" onclick="doLogout()">Sign Out</button>
+    <button class="btn-ghost-modal" onclick="closeModal('modal-acct')">Close</button>
+  </div>
+</div>
+
+<script>
+let userEmail = {json.dumps(email)};
+let userSub   = {'true' if sub else 'false'};
+let watchlist = [];
+let lastTicker = '';
+
+const DEFAULT_INDEXES = [
+  {{ticker:'SPY', name:'S&P 500'}},
+  {{ticker:'QQQ', name:'Nasdaq 100'}},
+  {{ticker:'DIA', name:'Dow Jones'}},
+  {{ticker:'IWM', name:'Russell 2000'}},
+  {{ticker:'GLD', name:'Gold'}},
+  {{ticker:'TLT', name:'Treasuries'}},
+];
+const TRENDING = [
+  {{ticker:'NVDA', name:'Nvidia'}},
+  {{ticker:'AAPL', name:'Apple'}},
+  {{ticker:'TSLA', name:'Tesla'}},
+  {{ticker:'MSFT', name:'Microsoft'}},
+  {{ticker:'AMZN', name:'Amazon'}},
+  {{ticker:'META', name:'Meta'}},
+  {{ticker:'GOOGL',name:'Alphabet'}},
+  {{ticker:'AMD',  name:'AMD'}},
+  {{ticker:'PLTR', name:'Palantir'}},
+  {{ticker:'COIN', name:'Coinbase'}},
+  {{ticker:'NFLX', name:'Netflix'}},
+  {{ticker:'BRK-B',name:'Berkshire'}},
+];
+
+const INVESTORS = [
+  {{initials:'BG',name:'Benjamin Graham',years:'1894–1976',tag:'FATHER OF VALUE',bio:'Wrote the bible of investing. Invented intrinsic value and margin of safety. Mentored Warren Buffett.',quote:'The investor\u2019s chief problem is likely to be himself.'}},
+  {{initials:'WB',name:'Warren Buffett',years:'1930–',tag:'ORACLE OF OMAHA',bio:'Built Berkshire from a failing mill into a $900B empire averaging ~20% annual returns for 60 years.',quote:'Price is what you pay. Value is what you get.'}},
+  {{initials:'PL',name:'Peter Lynch',years:'1944–',tag:'PEG PIONEER',bio:'Ran Fidelity Magellan to 29% annual returns. Believed ordinary people had an edge over Wall Street.',quote:'Know what you own, and know why you own it.'}},
+  {{initials:'JT',name:'John Templeton',years:'1912–2008',tag:'GLOBAL PIONEER',bio:'Bought 100 shares of every NYSE stock under $1 in 1939 and made a fortune. Built the first global fund.',quote:'The time of maximum pessimism is the best time to buy.'}},
+  {{initials:'JS',name:'Jim Simons',years:'1938–2024',tag:'THE QUANT KING',bio:'Renaissance\u2019s Medallion Fund averaged 66% annually for decades using pure mathematics and signals.',quote:'We don\u2019t override the models. The models know.'}},
+  {{initials:'CM',name:'Charlie Munger',years:'1924–2023',tag:'MENTAL MODELS',bio:'Buffett\u2019s partner for 45 years. Shifted Berkshire toward quality businesses at fair prices.',quote:'Invert, always invert.'}},
+];
+
+const priceCache = {{}};
+
+// ── clock ──
+(function tick(){{
+  const el=document.getElementById('cmd-clock');
+  if(el) el.textContent=new Date().toLocaleTimeString([],{{hour:'2-digit',minute:'2-digit'}});
+  setTimeout(tick,1000);
+}})();
+
+// ── init ──
+window.addEventListener('DOMContentLoaded',()=>{{
+  if(userEmail){{
+    fetch('/api/watchlist').then(r=>r.json()).then(d=>{{ if(d.ok){{watchlist=d.watchlist||[];renderWLBar();}} }}).catch(()=>{{}});
+  }} else {{
+    try{{ watchlist=JSON.parse(sessionStorage.getItem('wl')||'[]'); }}catch(e){{ watchlist=[]; }}
+  }}
+  syncHeader();
+  renderMinds();
+  {toast_js}
+}});
+
+// ── pane switching ──
+function switchPane(p){{
+  ['oracle','watch','minds','about'].forEach(x=>{{
+    document.getElementById('pane-'+x).classList.toggle('hidden',x!==p);
+    document.getElementById('dock-'+x).classList.toggle('on',x===p);
+  }});
+  if(p==='watch') renderWLPage();
+  window.scrollTo({{top:0,behavior:'smooth'}});
+}}
+function goHome(){{ switchPane('oracle'); }}
+
+// ── header sync ──
+function syncHeader(){{
+  const login=document.getElementById('btn-login');
+  const acct=document.getElementById('btn-acct');
+  const sub=document.getElementById('btn-sub');
+  if(userEmail){{
+    login.classList.add('hidden'); acct.classList.remove('hidden');
+    sub.style.display=userSub?'none':'';
+  }} else {{
+    login.classList.remove('hidden'); acct.classList.add('hidden');
+    sub.style.display='';
+  }}
+}}
+
+// ── input ──
+function setQ(v){{ document.getElementById('search').value=v; doAnalyze(); }}
+document.getElementById('search').addEventListener('keydown',e=>{{ if(e.key==='Enter'){{e.preventDefault();doAnalyze();}} }});
+document.getElementById('search').addEventListener('input',e=>{{ e.target.value=e.target.value.toUpperCase(); }});
+
+// ── ANALYZE ──
+async function doAnalyze(){{
+  const t=document.getElementById('search').value.trim().toUpperCase();
+  if(!t) return;
+  switchPane('oracle');
+  lastTicker=t;
+  document.getElementById('btn-go').disabled=true;
+  document.getElementById('results').classList.add('hidden');
+  document.getElementById('spinner').classList.add('on');
+  setStatus('Consulting the oracle for '+t+'…','var(--gold)');
+  try{{
+    const r=await fetch('/api/quote?q='+encodeURIComponent(t));
+    if(r.status===402){{ document.getElementById('spinner').classList.remove('on'); document.getElementById('btn-go').disabled=false; setStatus('Free lookup used','var(--w3)'); openModal('pay'); return; }}
+    if(!r.ok){{ const e=await r.json(); throw new Error(e.error||'Server error'); }}
+    const d=await r.json();
+    render(d);
+    setStatus('Analysis complete · '+d.ticker+' · '+new Date().toLocaleTimeString(),'var(--jade)');
+    loadAI(d.ticker);
+    loadHealthAI(d.ticker);
+  }}catch(e){{
+    setStatus('⚠ '+e.message,'var(--blood2)');
+    document.getElementById('results').innerHTML='<div class="ai-block" style="border-color:var(--blood)"><div class="ai-body" style="color:var(--blood2);font-style:normal">⚠ '+e.message+'</div></div>';
+    document.getElementById('results').classList.remove('hidden');
+  }}finally{{
+    document.getElementById('spinner').classList.remove('on');
+    document.getElementById('btn-go').disabled=false;
+  }}
+}}
+
+function render(d){{
+  const p=d.price;
+  const cls=d.verdict_cls==='up'?'up':d.verdict_cls==='down'?'down':'fair';
+  let comp=d.composite;
+  let marginPct=(comp&&comp>0&&p)?((comp-p)/p*100):null;
+  const pct=(d.hi52>d.lo52&&d.lo52>0)?Math.min(Math.max((p-d.lo52)/(d.hi52-d.lo52),0),1)*100:null;
+
+  // verdict highlight word
+  let vmain=d.verdict_text||'Insufficient data';
+  let vword='', vrest=vmain;
+  const vm=vmain.replace('✦','').trim();
+  let html='';
+
+  // ── HERO: VERDICT STAGE ──
+  html+=`<div class="divider"><div class="divider-line"></div><div class="divider-txt">ORACLE VERDICT</div><div class="divider-line r"></div></div>`;
+  html+=`<div class="verdict-stage">
+    <div class="vs-glow ${{cls}}"></div>
+    <div class="vs-strip ${{cls}}"></div>
+    <div class="vs-co">${{d.name}} · ${{d.ticker}}</div>
+    <div class="vs-sector">${{(d.sector||'—').toUpperCase()}} · ${{(d.asset_type||'stock').toUpperCase()}}</div>
+    <div class="vs-comp-label">◆ SENECA COMPOSITE FAIR VALUE</div>
+    <div class="vs-comp">${{comp&&comp>0?fp(comp):'N/A'}}</div>
+    <div class="vs-comp-sub">WEIGHTED SYNTHESIS OF SEVEN MODELS</div>`;
+  if(marginPct!==null){{
+    const ms=marginPct>=0?'▲ '+marginPct.toFixed(1)+'% MARGIN OF SAFETY':'▼ '+Math.abs(marginPct).toFixed(1)+'% ABOVE FAIR VALUE';
+    html+=`<div class="vs-margin ${{cls}}">${{ms}}</div>`;
+  }} else {{ html+=`<div class="vs-margin fair">—</div>`; }}
+
+  html+=`<div class="vs-verdict ${{cls}}">
+    <div class="vs-verdict-main"><span class="hl-${{cls}}">${{vm}}</span></div>
+    <div class="vs-verdict-sub">${{d.verdict_detail||'Six-model consensus vs. current price.'}}</div>
+  </div>`;
+
+  // current stats
+  html+=`<div class="vs-stats">
+    <div class="vs-stat"><div class="vs-stat-lbl">MARKET PRICE</div><div class="vs-stat-val">${{fp(p)}}</div></div>
+    <div class="vs-stat"><div class="vs-stat-lbl">TODAY</div><div class="vs-stat-val ${{d.chg>=0?'up':'down'}}">${{d.chg>=0?'▲':'▼'}} ${{Math.abs(d.chg).toFixed(2)}}%</div></div>
+    <div class="vs-stat"><div class="vs-stat-lbl">52W POS</div><div class="vs-stat-val">${{pct!==null?pct.toFixed(0)+'%':'—'}}</div></div>
+  </div>`;
+
+  // range
+  html+=`<div class="vs-range">
+    <div class="vs-range-ends">
+      <span class="vs-range-lo">${{d.lo52>0?'$'+d.lo52.toFixed(2):'—'}}</span>
+      <span class="vs-range-mid">52-WEEK RANGE</span>
+      <span class="vs-range-hi">${{d.hi52>0?'$'+d.hi52.toFixed(2):'—'}}</span>
+    </div>
+    <div class="vs-track"><div class="vs-fill" style="width:${{pct!==null?pct:0}}%"></div><div class="vs-pin" style="left:${{pct!==null?pct:0}}%"></div></div>
+  </div>`;
+
+  // ── MODEL MATRIX ──
+  html+=`<div class="matrix-head"><span>VALUATION MODEL</span><span>FAIR VALUE · Δ</span></div>`;
+  html+=d.models.map(m=>{{
+    const v=m.value;
+    const sc=m.sig_cls==='up'?'up':m.sig_cls==='down'?'down':(m.sig_cls==='na'?'na':'fair');
+    let delta='—', barW=15;
+    if(v&&v>0&&p){{ const dm=(v-p)/p*100; delta=(dm>=0?'+':'')+dm.toFixed(0)+'%'; barW=Math.min(Math.max(50+dm,8),98); }}
+    return `<div class="mx-row">
+      <div class="mx-bar ${{sc}}" style="width:${{barW}}%"></div>
+      <div class="mx-name">${{m.name}}</div>
+      <div class="mx-val ${{sc}}">${{v&&v>0?fp(v):'N/A'}}</div>
+      <div class="mx-delta ${{sc}}">${{delta}}</div>
+    </div>`;
+  }}).join('');
+  html+=`</div>`; // close verdict-stage
+
+  // ── HEALTH CARD ──
+  if(d.health){{
+    const h=d.health;
+    const g=h.grade||'C';
+    html+=`<div class="health-block">
+      <div class="health-top">
+        <div class="health-title">◆ FINANCIAL HEALTH</div>
+        <div class="health-gr">
+          <div class="health-score">${{h.score}}<small>/100</small></div>
+          <div class="health-grade ${{g}}">${{g}}</div>
+        </div>
+      </div>
+      <div class="health-bar"><div class="health-bar-fill ${{g}}" style="width:${{h.score}}%"></div></div>`;
+    const bd=h.breakdown||{{}};
+    const keys=Object.keys(bd);
+    if(keys.length){{
+      html+=`<div class="health-grid">`+keys.slice(0,8).map(k=>`<div class="hg-item"><span class="hg-k">${{k}}</span><span class="hg-v">${{bd[k]}}</span></div>`).join('')+`</div>`;
+    }}
+    if(h.flags&&h.flags.length){{
+      html+=`<div class="health-flags">`+h.flags.map(f=>`<span class="health-flag">⚠ ${{f}}</span>`).join('')+`</div>`;
+    }}
+    // health AI placeholder
+    html+=`<div id="health-ai" style="border-top:0.5px solid var(--line)">
+      <div class="ai-head"><div class="ai-ic jade">⚕</div><div class="ai-title">SENECA FORENSIC ANALYSIS</div></div>
+      <div class="ai-loading" id="health-ai-load"><div class="dot"></div><div class="dot"></div><div class="dot"></div><span class="ai-loading-txt">Probing for hidden risks…</span></div>
+    </div>`;
+    html+=`</div>`;
+  }}
+
+  // ── AI VERDICT CARD ──
+  html+=`<div class="ai-block">
+    <div class="ai-head"><div class="ai-ic">◆</div><div class="ai-title">SENECA AI · VALUE THESIS</div></div>
+    <div id="ai-verdict"><div class="ai-loading"><div class="dot"></div><div class="dot"></div><div class="dot"></div><span class="ai-loading-txt">The oracle is contemplating…</span></div></div>
+  </div>`;
+
+  // ── ACTIONS ──
+  const inWL=watchlist.includes(d.ticker);
+  html+=`<div class="actions">
+    <button class="act-btn ${{inWL?'saved':''}}" id="wl-toggle" onclick="toggleWL('${{d.ticker}}')">${{inWL?'★ SAVED':'☆ ADD TO WATCHLIST'}}</button>
+    <button class="act-btn" onclick="downloadReport('${{d.ticker}}')">⬇ REPORT</button>
+  </div>`;
+
+  document.getElementById('results').innerHTML=html;
+  document.getElementById('results').classList.remove('hidden');
+}}
+
+// ── AI loaders ──
+async function loadAI(t){{
+  try{{
+    const r=await fetch('/api/ai?q='+encodeURIComponent(t));
+    const d=await r.json();
+    const el=document.getElementById('ai-verdict');
+    if(el) el.innerHTML=d.verdict?`<div class="ai-body">${{d.verdict}}</div>`:`<div class="ai-body" style="color:var(--w3)">AI analysis unavailable. The seven models above remain your guide.</div>`;
+  }}catch(e){{
+    const el=document.getElementById('ai-verdict');
+    if(el) el.innerHTML=`<div class="ai-body" style="color:var(--w3)">AI analysis unavailable.</div>`;
+  }}
+}}
+async function loadHealthAI(t){{
+  try{{
+    const r=await fetch('/api/health-ai?q='+encodeURIComponent(t));
+    const d=await r.json();
+    const el=document.getElementById('health-ai-load');
+    if(el) el.outerHTML=d.analysis?`<div class="ai-body">${{d.analysis}}</div>`:`<div class="ai-body" style="color:var(--w3)">Forensic analysis unavailable.</div>`;
+  }}catch(e){{
+    const el=document.getElementById('health-ai-load');
+    if(el) el.outerHTML=`<div class="ai-body" style="color:var(--w3)">Forensic analysis unavailable.</div>`;
+  }}
+}}
+
+function downloadReport(t){{ window.open('/api/pdf?q='+encodeURIComponent(t),'_blank'); }}
+
+// ── WATCHLIST ──
+function saveWL(){{
+  if(userEmail) fetch('/api/watchlist',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{watchlist}})}}).catch(()=>{{}});
+  else sessionStorage.setItem('wl',JSON.stringify(watchlist));
+}}
+function renderWLBar(){{ if(!document.getElementById('pane-watch').classList.contains('hidden')) renderWLPage(); }}
+function toggleWL(t){{
+  if(watchlist.includes(t)){{ watchlist=watchlist.filter(x=>x!==t); toast('Removed '+t); }}
+  else {{ watchlist.push(t); toast('★ '+t+' added to watchlist'); }}
+  saveWL();
+  const btn=document.getElementById('wl-toggle');
+  if(btn){{ const on=watchlist.includes(t); btn.classList.toggle('saved',on); btn.textContent=on?'★ SAVED':'☆ ADD TO WATCHLIST'; }}
+}}
+function removeWL(t){{ watchlist=watchlist.filter(x=>x!==t); saveWL(); renderWLPage(); }}
+
+function buildWLCard(ticker,name,removable){{
+  const c=priceCache[ticker];
+  let inner;
+  if(c){{
+    const arrow=c.chg>=0?'▲':'▼', cl=c.chg>=0?'up':'dn';
+    inner=`<div class="rail-px">$${{c.price.toLocaleString('en-US',{{minimumFractionDigits:2,maximumFractionDigits:2}})}}</div><div class="rail-chg ${{cl}}">${{arrow}} ${{Math.abs(c.chg).toFixed(2)}}%</div>`;
+  }} else {{
+    inner=`<div class="rail-px"><span class="rail-shimmer" style="width:46px;height:14px">&nbsp;</span></div><div class="rail-chg" style="margin-top:4px"><span class="rail-shimmer" style="width:32px;height:8px">&nbsp;</span></div>`;
+  }}
+  const cardCls=c?(c.chg>=0?'up':'dn'):'';
+  const rm=removable?`<span class="rail-rm" onclick="event.stopPropagation();removeWL('${{ticker}}')">✕</span>`:'';
+  return `<div class="rail-card ${{cardCls}}" onclick="setQ('${{ticker}}')" style="min-width:96px">${{rm}}<div class="rail-sym">${{ticker}}</div>${{inner}}</div>`;
+}}
+
+function renderWLPage(){{
+  const rail=document.getElementById('wl-rail');
+  const note=document.getElementById('wl-note');
+  let tickers;
+  if(watchlist.length){{
+    note.textContent='Your saved symbols · tap any to analyze.';
+    tickers=[...watchlist];
+    rail.innerHTML=watchlist.map(t=>buildWLCard(t,'',true)).join('');
+  }} else {{
+    note.textContent='No saved symbols yet. Here are the market benchmarks — analyze a stock and tap ☆ to build your list.';
+    tickers=DEFAULT_INDEXES.map(x=>x.ticker);
+    rail.innerHTML=DEFAULT_INDEXES.map(x=>buildWLCard(x.ticker,x.name,false)).join('');
+  }}
+  // trending row always shown
+  const trail=document.getElementById('trend-rail');
+  if(trail) trail.innerHTML=TRENDING.map(x=>buildWLCard(x.ticker,x.name,false)).join('');
+  const allT=[...new Set([...tickers, ...TRENDING.map(x=>x.ticker)])];
+  fetchWLPrices(allT);
+}}
+
+async function fetchWLPrices(tickers){{
+  const btn=document.getElementById('wl-refresh');
+  if(btn) btn.textContent='↻ SYNCING';
+  try{{
+    const r=await fetch('/api/price?tickers='+tickers.join(','));
+    if(r.ok){{
+      const data=await r.json();
+      Object.entries(data).forEach(([t,d])=>{{ priceCache[t]=d; }});
+      renderWLCardsInPlace();
+    }}
+  }}catch(e){{}}
+  if(btn) btn.textContent='↻ SYNC';
+}}
+function renderWLCardsInPlace(){{
+  const rail=document.getElementById('wl-rail');
+  if(rail){{
+    if(watchlist.length) rail.innerHTML=watchlist.map(t=>buildWLCard(t,'',true)).join('');
+    else rail.innerHTML=DEFAULT_INDEXES.map(x=>buildWLCard(x.ticker,x.name,false)).join('');
+  }}
+  const trail=document.getElementById('trend-rail');
+  if(trail) trail.innerHTML=TRENDING.map(x=>buildWLCard(x.ticker,x.name,false)).join('');
+}}
+function refreshWL(){{
+  const base=watchlist.length?[...watchlist]:DEFAULT_INDEXES.map(x=>x.ticker);
+  const allT=[...new Set([...base, ...TRENDING.map(x=>x.ticker)])];
+  allT.forEach(t=>delete priceCache[t]);
+  renderWLPage();
+}}
+
+// ── MINDS ──
+function renderMinds(){{
+  const el=document.getElementById('minds-list');
+  el.innerHTML=INVESTORS.map(inv=>`
+    <div class="master" style="width:auto;margin-bottom:9px">
+      <div class="master-top">
+        <div class="master-medal">${{inv.initials}}</div>
+        <div><div class="master-name">${{inv.name}}</div><div class="master-years">${{inv.years}}</div></div>
+      </div>
+      <div class="master-tag">${{inv.tag}}</div>
+      <div class="master-bio">${{inv.bio}}</div>
+      <div class="master-quote">❝ ${{inv.quote}}</div>
+    </div>`).join('');
+}}
+
+// ── MODALS ──
+function openModal(name){{
+  if(name==='acct'){{
+    document.getElementById('acct-email').textContent='◆ '+userEmail;
+    const st=document.getElementById('acct-status');
+    if(userSub){{ st.textContent='✦ PRO · UNLIMITED ACCESS'; st.className='modal-acct-status pro'; document.getElementById('acct-sub-btn').style.display='none'; }}
+    else {{ st.textContent='FREE TIER'; st.className='modal-acct-status free'; document.getElementById('acct-sub-btn').style.display=''; }}
+  }}
+  document.getElementById('modal-'+name).classList.add('on');
+}}
+function closeModal(id){{ document.getElementById(id).classList.remove('on'); }}
+function switchModal(from,to){{ closeModal(from); openModal(to.replace('modal-','')); }}
+['modal-pay','modal-signup','modal-login','modal-acct'].forEach(id=>{{
+  const m=document.getElementById(id);
+  if(m) m.addEventListener('click',e=>{{ if(e.target===e.currentTarget) closeModal(id); }});
+}});
+
+// ── SUBSCRIBE ──
+function clickSubscribe(){{
+  if(userSub){{ toast('✦ You already have full access!'); return; }}
+  if(userEmail){{ launchStripe(); }}
+  else {{ openModal('signup'); }}
+}}
+async function launchStripe(){{
+  const btn=document.getElementById('pay-btn');
+  if(btn) btn.textContent='Loading…';
+  try{{
+    const r=await fetch('/api/checkout',{{method:'POST'}});
+    const d=await r.json();
+    if(d.url){{ window.location.href=d.url; }}
+    else {{ userSub=true; syncHeader(); closeModal('modal-pay'); toast('✦ Demo mode: full access!'); }}
+  }}catch(e){{ userSub=true; syncHeader(); closeModal('modal-pay'); toast('✦ Demo mode!'); }}
+  if(btn) btn.textContent='✦ SUBSCRIBE NOW';
+}}
+
+// ── AUTH ──
+async function doSignup(){{
+  const email=document.getElementById('signup-email').value.trim();
+  const pw=document.getElementById('signup-pw').value;
+  const err=document.getElementById('signup-err');
+  if(!email||!pw){{ err.textContent='Email and password required'; return; }}
+  err.textContent='';
+  try{{
+    const r=await fetch('/api/signup',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{email,pw}})}});
+    const d=await r.json();
+    if(!d.ok){{ err.textContent=d.error||'Signup failed'; return; }}
+    userEmail=d.email; userSub=d.sub;
+    syncHeader(); closeModal('modal-signup'); toast('◆ Account created.');
+    setTimeout(launchStripe,500);
+  }}catch(e){{ err.textContent='Network error'; }}
+}}
+async function doLogin(){{
+  const email=document.getElementById('login-email').value.trim();
+  const pw=document.getElementById('login-pw').value;
+  const remember=document.getElementById('login-remember').checked;
+  const err=document.getElementById('login-err');
+  if(!email||!pw){{ err.textContent='Email and password required'; return; }}
+  err.textContent='';
+  try{{
+    const r=await fetch('/api/login',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{email,pw,remember}})}});
+    const d=await r.json();
+    if(!d.ok){{ err.textContent=d.error||'Login failed'; return; }}
+    userEmail=d.email; userSub=d.sub;
+    fetch('/api/watchlist').then(rr=>rr.json()).then(dd=>{{ if(dd.ok){{watchlist=dd.watchlist||[];renderWLBar();}} }}).catch(()=>{{}});
+    syncHeader(); closeModal('modal-login');
+    toast(userSub?'✦ Welcome back! Pro active.':'◆ Signed in.');
+  }}catch(e){{ err.textContent='Network error'; }}
+}}
+async function doLogout(){{
+  await fetch('/api/logout',{{method:'POST'}});
+  userEmail=''; userSub=false; watchlist=[];
+  syncHeader(); closeModal('modal-acct'); toast('Signed out.');
+}}
+
+// ── helpers ──
+function toast(msg){{ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),3500); }}
+function setStatus(msg,col){{ const e=document.getElementById('status'); e.textContent=msg; e.style.color=col||'var(--w3)'; }}
+function fp(v){{ if(!v||v<=0) return 'N/A'; return '$'+v.toLocaleString('en-US',{{minimumFractionDigits:2,maximumFractionDigits:2}}); }}
+function fc(v){{ if(!v||v<=0) return '—'; if(v>1e12) return '$'+(v/1e12).toFixed(2)+'T'; if(v>1e9) return '$'+(v/1e9).toFixed(1)+'B'; if(v>1e6) return '$'+(v/1e6).toFixed(0)+'M'; return '—'; }}
+</script>
+
+</body></html>"""
+
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5678)
