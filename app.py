@@ -666,1664 +666,830 @@ def render_app(sub=False, email="", toast=""):
     return f"""<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8"/>
-<meta name="google-site-verification" content="dZDX1AMHsuaZcDjFD8CGt6EVQepwkUk4fre82eWuiHM"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1"/>
 <title>SENECA ◆ Intrinsic Value Oracle</title>
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-QBNR5XWKVS"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){{dataLayer.push(arguments);}}
-  gtag('js', new Date());
-  gtag('config', 'G-QBNR5XWKVS');
-</script>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet"/>
 {"<script src='https://js.stripe.com/v3/'></script>" if stripe_pk else ""}
 <style>
-:root{{--bg:#0d0a04;--panel:#140d05;--card:#1e1308;--card2:#271908;--card3:#301f0c;
-  --border:#4e3010;--b2:#6e4514;--gold:#c88a1a;--g2:#e8aa34;--g3:#f5cc60;
-  --turq:#1e7a6a;--t2:#28a892;--t3:#48c4ae;--green:#3a8a24;--red:#a03020;
-  --muted:#6a4e2c;--text:#f5ecce;--sub:#cca054;--dim:#6a5030;}}
 *{{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}}
-html,body{{min-height:100%;background:var(--bg);color:var(--text);font-family:'Cormorant Garamond',serif;font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}}
-::-webkit-scrollbar{{width:3px}}::-webkit-scrollbar-thumb{{background:var(--b2);border-radius:2px}}
+:root{{
+  --void:#000;--obsidian:#060606;--carbon:#0a0a0a;--graphite:#0f0f0f;--slate:#141414;--slate2:#1a1a1a;
+  --line:#181818;--line2:#222;--line3:#2c2c2c;
+  --gold:#c8901a;--gold2:#e8aa34;--gold3:#f0b840;--gold-dim:#6a4d12;
+  --jade:#2ea043;--jade2:#3fbf55;--blood:#c4302b;--blood2:#e0463f;
+  --w1:#fff;--w2:#9a9a9a;--w3:#525252;--w4:#2e2e2e;--dim:#525252;
+  --mono:'JetBrains Mono','SF Mono',monospace;
+  --disp:'Cormorant Garamond',Georgia,serif;
+  --safe-b:env(safe-area-inset-bottom,0px);--safe-t:env(safe-area-inset-top,0px);
+}}
+html,body{{min-height:100%;background:var(--void);color:var(--w1);font-family:var(--disp);overscroll-behavior:none;-webkit-font-smoothing:antialiased}}
+body{{position:relative}}
+body::before{{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,.008) 2px,rgba(255,255,255,.008) 3px);pointer-events:none;z-index:200}}
+::-webkit-scrollbar{{width:0;display:none}}
+*{{scrollbar-width:none}}
+.hidden{{display:none!important}}
+a{{color:var(--gold);cursor:pointer;text-decoration:none}}
 
-/* HERO */
-.hero{{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center;position:relative}}
-.hero-bg{{position:absolute;inset:0;background:radial-gradient(ellipse 60% 50% at 50% 0%,rgba(200,138,26,.08),transparent 70%),repeating-linear-gradient(0deg,transparent,transparent 79px,rgba(78,48,16,.12) 80px),repeating-linear-gradient(90deg,transparent,transparent 79px,rgba(78,48,16,.12) 80px);pointer-events:none}}
-.hero-gem{{width:70px;height:70px;background:linear-gradient(135deg,var(--g2),var(--g3));transform:rotate(45deg);display:flex;align-items:center;justify-content:center;margin-bottom:28px;box-shadow:0 0 60px rgba(232,170,52,.25)}}
-.hero-gem span{{transform:rotate(-45deg);font-size:1.3rem;color:var(--bg)}}
-.hero-title{{font-size:clamp(3rem,9vw,5.5rem);font-weight:300;color:var(--g3);letter-spacing:.35em;position:relative;z-index:1}}
-.hero-sub{{font-size:1rem;color:var(--sub);font-style:italic;letter-spacing:.15em;margin:8px 0 36px;position:relative;z-index:1}}
-.hero-rule{{width:160px;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:0 auto 36px}}
-.hero-pitch{{max-width:500px;font-size:1.08rem;color:var(--sub);line-height:1.9;font-style:italic;margin-bottom:40px;position:relative;z-index:1}}
-.hero-pitch strong{{color:var(--text);font-style:normal}}
-.hero-btns{{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:36px;position:relative;z-index:1}}
-.btn-teal{{background:linear-gradient(135deg,var(--turq),var(--t2));color:var(--bg);border:none;border-radius:14px;padding:14px 30px;font-family:'Cormorant Garamond',serif;font-size:1rem;font-weight:600;letter-spacing:.1em;cursor:pointer;transition:all .2s}}
-.btn-teal:hover{{transform:translateY(-2px);opacity:.9}}
-.btn-outline{{background:transparent;color:var(--g2);border:1px solid var(--b2);border-radius:14px;padding:14px 30px;font-family:'Cormorant Garamond',serif;font-size:1rem;letter-spacing:.1em;cursor:pointer;transition:all .2s}}
-.btn-outline:hover{{border-color:var(--gold);color:var(--g3);transform:translateY(-2px)}}
-.hero-badges{{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;position:relative;z-index:1;margin-bottom:16px}}
-.badge{{background:var(--card2);border:1px solid var(--b2);border-radius:20px;padding:4px 13px;font-family:'Share Tech Mono',monospace;font-size:.56rem;color:var(--sub)}}
-.hero-note{{font-size:.72rem;color:var(--dim);font-style:italic;position:relative;z-index:1}}
-.hero-note a{{color:var(--g2);text-decoration:none;cursor:pointer}}
+/* ── COMMAND BAR ── */
+.cmd-bar{{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;padding-top:max(12px,var(--safe-t));border-bottom:0.5px solid var(--line);background:linear-gradient(180deg,var(--carbon),var(--void));position:sticky;top:0;z-index:100}}
+.cmd-id{{display:flex;align-items:center;gap:11px;cursor:pointer}}
+.cmd-gem{{width:24px;height:24px;background:linear-gradient(135deg,var(--gold),var(--gold3));transform:rotate(45deg);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 14px rgba(200,144,26,.35);position:relative}}
+.cmd-gem::after{{content:'◆';transform:rotate(-45deg);font-size:.46rem;color:#000;font-weight:900;position:absolute}}
+.cmd-name{{font-size:.86rem;font-weight:300;color:var(--w1);letter-spacing:.42em}}
+.cmd-acts{{display:flex;gap:6px;align-items:center}}
+.cmd-clock{{font-family:var(--mono);font-size:.5rem;color:var(--w3);letter-spacing:.08em;margin-right:4px}}
+.cmd-btn{{height:32px;padding:0 12px;border-radius:8px;font-family:var(--mono);font-size:.54rem;letter-spacing:.07em;display:flex;align-items:center;cursor:pointer;border:0.5px solid var(--line2);background:transparent;color:var(--w2);transition:all .15s}}
+.cmd-btn:active{{opacity:.7}}
+.cmd-btn-pro{{border-color:var(--gold-dim);color:var(--gold);background:rgba(200,144,26,.06)}}
+.cmd-btn-pro:hover{{background:rgba(200,144,26,.12)}}
 
-/* APP SHELL */
-.shell{{display:none;flex-direction:column;min-height:100vh}}.shell.on{{display:flex}}
+/* ── INPUT STAGE ── */
+.input-stage{{padding:24px 18px 6px}}
+.input-eyebrow{{text-align:center;font-family:var(--mono);font-size:.5rem;color:var(--w3);letter-spacing:.24em;margin-bottom:13px}}
+.input-field{{background:var(--obsidian);border:0.5px solid var(--line2);border-radius:18px;padding:16px 18px;position:relative;overflow:hidden;transition:border-color .2s}}
+.input-field::before{{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold-dim),transparent)}}
+.input-field:focus-within{{border-color:var(--gold-dim)}}
+.input-el{{width:100%;background:transparent;border:none;outline:none;font-size:2.1rem;font-weight:300;color:var(--w1);letter-spacing:.2em;text-align:center;line-height:1.1;font-family:var(--disp);text-transform:uppercase;caret-color:var(--gold)}}
+.input-el::placeholder{{color:var(--w4);font-size:1.1rem;letter-spacing:.06em;text-transform:none}}
+.input-go{{margin-top:11px;width:100%;height:50px;background:linear-gradient(135deg,var(--gold),var(--gold3));border:none;border-radius:13px;font-family:var(--mono);font-size:.7rem;font-weight:700;color:#000;letter-spacing:.16em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .15s}}
+.input-go:active{{opacity:.82}}
+.input-go:disabled{{background:var(--slate);color:var(--w3);cursor:default}}
 
-/* HEADER */
-.hdr{{background:rgba(20,13,5,.97);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid rgba(110,69,20,.5);padding:0 18px;padding-top:env(safe-area-inset-top,0px);position:sticky;top:0;z-index:100;display:flex;align-items:stretch;justify-content:space-between;gap:0;box-shadow:0 4px 40px rgba(0,0,0,.6),0 1px 0 rgba(232,170,52,.08)}}
-.hdr::before{{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent 0%,rgba(200,138,26,.2) 20%,rgba(232,170,52,.8) 50%,rgba(200,138,26,.2) 80%,transparent 100%)}}
-/* Logo */
-.hdr-logo{{display:flex;align-items:center;gap:12px;padding:11px 0;cursor:pointer;flex-shrink:0;transition:opacity .2s;position:relative}}
-.hdr-logo:hover{{opacity:.82}}
-.hdr-logo:hover .logo-home-hint{{opacity:1}}
-.logo-home-hint{{position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);font-family:'Share Tech Mono',monospace;font-size:.4rem;color:var(--dim);letter-spacing:.1em;opacity:0;transition:opacity .2s;white-space:nowrap}}
-/* Diamond gem — more premium */
-.hdr-gem{{width:36px;height:36px;background:linear-gradient(135deg,var(--gold) 0%,var(--g3) 50%,var(--g2) 100%);transform:rotate(45deg);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 0 1px rgba(245,204,96,.25),0 0 24px rgba(232,170,52,.2),inset 0 1px 0 rgba(255,255,255,.15)}}
-.hdr-gem span{{transform:rotate(-45deg);font-size:.65rem;color:var(--bg);font-weight:800;letter-spacing:0}}
-/* Logo text */
-.hdr-logo-text{{display:flex;flex-direction:column;gap:1px}}
-.hdr-logo-name{{font-size:1.28rem;font-weight:600;color:var(--g3);letter-spacing:.32em;line-height:1;font-family:'Cormorant Garamond',serif;text-shadow:0 0 30px rgba(245,204,96,.2)}}
-.hdr-logo-tag{{font-size:.48rem;color:var(--muted);font-style:italic;letter-spacing:.1em;font-family:'Share Tech Mono',monospace;text-transform:uppercase}}
-/* Center — clock sits here */
-.hdr-center{{flex:1;display:flex;align-items:center;justify-content:center}}
-/* Analog clock canvas — styled via JS */
-#analog-clock{{cursor:default}}
-/* Right side actions */
-.hdr-right{{display:flex;align-items:center;gap:7px;flex-shrink:0;padding:9px 0}}
-.btn-login{{background:transparent;color:var(--sub);border:1px solid rgba(110,69,20,.6);border-radius:8px;padding:6px 11px;font-family:'Share Tech Mono',monospace;font-size:.56rem;cursor:pointer;white-space:nowrap;letter-spacing:.06em;transition:all .2s}}
-.btn-login:hover{{border-color:var(--b2);color:var(--g2);background:rgba(110,69,20,.12)}}
-.btn-sub{{background:linear-gradient(135deg,var(--gold) 0%,var(--g2) 60%,var(--g3) 100%);color:var(--bg);border:none;border-radius:8px;padding:6px 13px;font-family:'Cormorant Garamond',serif;font-size:.9rem;font-weight:700;cursor:pointer;white-space:nowrap;letter-spacing:.03em;box-shadow:0 2px 14px rgba(200,138,26,.28);transition:all .22s}}
-.btn-sub:hover{{transform:translateY(-1px);box-shadow:0 5px 20px rgba(200,138,26,.42)}}
-.btn-acct{{background:rgba(110,69,20,.15);color:var(--g2);border:1px solid var(--b2);border-radius:8px;padding:6px 11px;font-family:'Share Tech Mono',monospace;font-size:.56rem;cursor:pointer;white-space:nowrap;letter-spacing:.05em;transition:all .2s}}
-.btn-acct:hover{{background:rgba(110,69,20,.3);color:var(--g3)}}
+/* chips */
+.chip-strip{{display:flex;gap:6px;padding:13px 18px 4px;overflow-x:auto}}
+.chip{{height:30px;padding:0 12px;background:var(--carbon);border:0.5px solid var(--line);border-radius:8px;font-family:var(--mono);font-size:.54rem;color:var(--w3);white-space:nowrap;letter-spacing:.05em;display:flex;align-items:center;cursor:pointer;flex-shrink:0;gap:5px;transition:all .15s}}
+.chip:active,.chip:hover{{border-color:var(--gold-dim);color:var(--gold)}}
+.chip-tick{{color:var(--jade);font-size:.4rem}}
 
-/* SEARCH */
-.search-wrap{{background:linear-gradient(180deg,var(--panel) 0%,rgba(20,13,5,.95) 100%);padding:14px 14px 0;border-bottom:1px solid rgba(78,48,16,.4)}}
-.search-box{{background:linear-gradient(160deg,var(--card2),var(--card));border:1px solid var(--b2);border-radius:16px;padding:12px 14px;box-shadow:0 4px 24px rgba(0,0,0,.3),inset 0 1px 0 rgba(232,170,52,.06)}}
-.search-row{{display:flex;align-items:center;gap:10px;margin-bottom:7px}}
-.search-input{{flex:1;min-width:0;width:0;background:transparent;border:none;outline:none;color:var(--g3);font-family:'Cormorant Garamond',serif;font-size:1.35rem;font-weight:600;text-align:center;letter-spacing:.12em;caret-color:var(--t3)}}
-.search-input::placeholder{{color:rgba(74,52,24,.9);font-size:.88rem;font-weight:400;letter-spacing:.03em}}
-.btn-analyze{{background:linear-gradient(135deg,var(--turq),var(--t2));color:var(--bg);border:none;border-radius:11px;padding:11px 18px;font-family:'Cormorant Garamond',serif;font-size:.92rem;font-weight:600;cursor:pointer;flex-shrink:0;white-space:nowrap;transition:all .22s;box-shadow:0 4px 16px rgba(30,122,106,.3),inset 0 1px 0 rgba(255,255,255,.1);letter-spacing:.04em}}
-.btn-analyze:hover{{transform:translateY(-1px);box-shadow:0 6px 24px rgba(30,122,106,.45)}}.btn-analyze:disabled{{background:var(--muted);cursor:default;transform:none;box-shadow:none}}
-.search-hint{{font-size:.56rem;color:var(--dim);font-style:italic;text-align:center;padding-bottom:3px;letter-spacing:.03em}}
-.chips{{display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px 12px}}
-.chip{{background:rgba(39,25,8,.8);border:1px solid rgba(110,69,20,.5);border-radius:20px;padding:4px 12px;font-family:'Share Tech Mono',monospace;font-size:.56rem;color:var(--muted);cursor:pointer;transition:all .18s;letter-spacing:.05em}}
-.chip:hover{{background:rgba(30,122,106,.2);border-color:var(--t2);color:var(--t3)}}
+/* status line */
+.status-line{{font-family:var(--mono);font-size:.52rem;color:var(--w3);text-align:center;padding:8px 18px;letter-spacing:.04em;min-height:26px}}
 
-/* WATCHLIST BAR */
-.wl-bar{{background:var(--panel);border-bottom:1px solid var(--border);padding:8px 14px;display:none}}
-.wl-bar.on{{display:block}}
-.wl-title{{font-family:'Share Tech Mono',monospace;font-size:.54rem;color:var(--muted);letter-spacing:.1em;margin-bottom:5px}}
-.wl-items{{display:flex;flex-wrap:wrap;gap:5px}}
-.wl-chip{{background:var(--card2);border:1px solid var(--b2);border-radius:18px;padding:3px 8px 3px 11px;display:flex;align-items:center;gap:4px;font-family:'Share Tech Mono',monospace;font-size:.58rem;color:var(--sub);cursor:pointer;transition:all .15s}}
-.wl-chip:hover{{border-color:var(--g2);color:var(--text)}}
-.wl-rm{{background:none;border:none;cursor:pointer;color:var(--muted);font-size:.66rem;line-height:1;padding:0 2px}}
-.wl-rm:hover{{color:var(--red)}}
+/* ── SPINNER ── */
+.spinner{{text-align:center;padding:46px 0;display:none}}
+.spinner.on{{display:block}}
+.spin-ring{{width:38px;height:38px;border:2px solid var(--line2);border-top-color:var(--gold);border-radius:50%;display:inline-block;animation:spin 0.9s linear infinite}}
+@keyframes spin{{to{{transform:rotate(360deg)}}}}
+.spin-txt{{font-family:var(--mono);font-size:.56rem;color:var(--w3);letter-spacing:.1em;margin-top:13px}}
 
-/* STATUS + TABS */
-.status-bar{{font-family:'Share Tech Mono',monospace;font-size:.56rem;color:var(--dim);text-align:center;padding:5px 14px;background:rgba(13,10,4,.9);border-bottom:1px solid rgba(78,48,16,.3);min-height:20px;letter-spacing:.04em}}
-.tabs{{display:flex;background:rgba(20,13,5,.97);border-bottom:1px solid rgba(78,48,16,.5);box-shadow:0 4px 20px rgba(0,0,0,.3)}}
-.tab{{flex:1;background:none;border:none;border-bottom:2px solid transparent;font-family:'Cormorant Garamond',serif;font-size:.92rem;color:var(--muted);padding:11px 8px;cursor:pointer;transition:all .22s;letter-spacing:.06em;position:relative;top:1px}}
-.tab:hover{{color:var(--sub)}}
-.tab.on{{color:var(--g2);border-bottom-color:var(--t2);background:linear-gradient(180deg,rgba(30,122,106,.05) 0%,transparent 100%)}}
-main{{flex:1;overflow-y:auto;padding:0;padding-bottom:calc(20px + env(safe-area-inset-bottom,0px))}}
+/* ── DIVIDER ── */
+.divider{{display:flex;align-items:center;gap:12px;padding:14px 20px 14px}}
+.divider-line{{flex:1;height:0.5px;background:linear-gradient(90deg,transparent,var(--line3))}}
+.divider-line.r{{background:linear-gradient(90deg,var(--line3),transparent)}}
+.divider-txt{{font-family:var(--mono);font-size:.48rem;color:var(--w3);letter-spacing:.2em}}
 
-/* ── EMPTY STATE ── */
-.empty-state{{padding:20px 14px 32px;display:flex;flex-direction:column;gap:0}}
-.empty-quote-carousel{{position:relative;overflow:hidden;margin-bottom:0}}
-.eq-slide{{display:none;animation:fadeIn .6s ease}}
-.eq-slide.active{{display:block}}
-@keyframes fadeIn{{from{{opacity:0;transform:translateY(10px)}}to{{opacity:1;transform:translateY(0)}}}}
-.eq-card{{background:linear-gradient(135deg,rgba(39,25,8,.9),rgba(30,19,8,.95));border:1px solid rgba(110,69,20,.5);border-radius:20px;padding:24px 22px 20px;margin-bottom:16px;position:relative;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.4),inset 0 1px 0 rgba(232,170,52,.07)}}
-.eq-card::before{{content:'❝';position:absolute;top:8px;left:14px;font-size:3.5rem;color:rgba(110,69,20,.35);font-family:Georgia,serif;line-height:1}}
-.eq-card::after{{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(200,138,26,.2),transparent)}}
-.eq-text{{font-size:1.08rem;color:var(--text);line-height:1.8;font-style:italic;padding-left:28px;margin-bottom:14px;text-shadow:0 1px 3px rgba(0,0,0,.3)}}
-.eq-author{{font-family:'Share Tech Mono',monospace;font-size:.56rem;color:var(--g2);letter-spacing:.14em;padding-left:28px}}
-.eq-dots{{display:flex;justify-content:center;gap:6px;margin-bottom:18px}}
-.eq-dot{{width:5px;height:5px;border-radius:50%;background:var(--border);cursor:pointer;transition:all .22s}}
-.eq-dot.active{{background:var(--g2);transform:scale(1.4);box-shadow:0 0 6px rgba(232,170,52,.4)}}
-.empty-grid{{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:14px}}
-.empty-tile{{background:linear-gradient(160deg,rgba(39,25,8,.8),rgba(30,19,8,.9));border:1px solid rgba(78,48,16,.6);border-radius:16px;padding:16px 14px 14px;text-align:center;transition:all .2s;box-shadow:0 4px 16px rgba(0,0,0,.3)}}
-.empty-tile:hover{{transform:translateY(-2px);border-color:var(--b2);box-shadow:0 8px 28px rgba(0,0,0,.4)}}
-.empty-tile-icon{{font-size:1.5rem;margin-bottom:8px;opacity:.8}}
-.empty-tile-title{{font-size:.68rem;color:var(--g2);font-weight:600;letter-spacing:.1em;margin-bottom:5px;font-family:'Share Tech Mono',monospace}}
-.empty-tile-body{{font-size:.65rem;color:var(--sub);font-style:italic;line-height:1.55}}
-.empty-cta{{background:linear-gradient(160deg,rgba(39,25,8,.8),rgba(30,19,8,.9));border:1px solid rgba(78,48,16,.5);border-radius:16px;padding:16px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.25)}}
-.empty-cta-title{{font-size:.58rem;color:var(--muted);font-family:'Share Tech Mono',monospace;letter-spacing:.14em;margin-bottom:12px}}
-.market-ticker{{display:flex;justify-content:center;gap:18px;flex-wrap:wrap}}
-.mt-item{{text-align:center;cursor:pointer;padding:3px 8px;border-radius:8px;transition:background .18s}}
-.mt-item:hover{{background:rgba(30,122,106,.15)}}
-.mt-sym{{font-family:'Share Tech Mono',monospace;font-size:.62rem;color:var(--sub);letter-spacing:.08em;transition:color .18s}}
-.mt-item:hover .mt-sym{{color:var(--t3)}}
-.mt-tap{{font-size:.72rem;color:var(--dim);font-style:italic;margin-top:10px}}
+/* ── VERDICT STAGE (hero) ── */
+.verdict-stage{{margin:0 14px;background:radial-gradient(ellipse at top,var(--graphite),var(--obsidian));border:0.5px solid var(--line2);border-radius:24px;overflow:hidden;position:relative}}
+.vs-glow{{position:absolute;top:0;left:0;right:0;height:100px;pointer-events:none}}
+.vs-glow.up{{background:radial-gradient(ellipse at top,rgba(46,160,67,.14),transparent 70%)}}
+.vs-glow.down{{background:radial-gradient(ellipse at top,rgba(196,48,43,.14),transparent 70%)}}
+.vs-glow.fair{{background:radial-gradient(ellipse at top,rgba(200,144,26,.12),transparent 70%)}}
+.vs-strip{{height:3px}}
+.vs-strip.up{{background:linear-gradient(90deg,transparent,var(--jade),transparent)}}
+.vs-strip.down{{background:linear-gradient(90deg,transparent,var(--blood),transparent)}}
+.vs-strip.fair{{background:linear-gradient(90deg,transparent,var(--gold),transparent)}}
+.vs-co{{text-align:center;padding:17px 20px 2px;font-family:var(--mono);font-size:.54rem;color:var(--w3);letter-spacing:.1em}}
+.vs-sector{{text-align:center;font-family:var(--mono);font-size:.46rem;color:var(--w4);letter-spacing:.1em;margin-top:3px}}
 
-/* RESULTS area */
-.results-wrap{{padding:14px 12px}}
+/* COMPOSITE — the absolute hero */
+.vs-comp-label{{text-align:center;font-family:var(--mono);font-size:.5rem;color:var(--gold-dim);letter-spacing:.22em;margin-top:14px}}
+.vs-comp{{text-align:center;font-size:3.5rem;font-weight:300;color:var(--gold3);line-height:1;letter-spacing:-.01em;margin:5px 0 2px;text-shadow:0 0 44px rgba(240,184,64,.22)}}
+.vs-comp-sub{{text-align:center;font-family:var(--mono);font-size:.5rem;color:var(--w3);letter-spacing:.08em;margin-bottom:3px}}
+.vs-margin{{text-align:center;font-family:var(--mono);font-size:.72rem;letter-spacing:.05em;margin-bottom:15px;font-weight:500}}
+.vs-margin.up{{color:var(--jade)}}.vs-margin.down{{color:var(--blood)}}.vs-margin.fair{{color:var(--gold)}}
 
-/* ── LUXURY HERO CARD ── */
-.hero-card{{background:linear-gradient(160deg,rgba(39,25,8,.95) 0%,rgba(20,13,5,.98) 100%);border:1px solid rgba(110,69,20,.6);border-radius:22px;margin-bottom:13px;overflow:hidden;box-shadow:0 12px 60px rgba(0,0,0,.6),0 4px 0 rgba(0,0,0,.3),inset 0 1px 0 rgba(232,170,52,.1)}}
-.hero-card-band{{height:2px}}
-.hero-card-band.up{{background:linear-gradient(90deg,transparent,var(--green),#5ab83a,var(--green),transparent)}}
-.hero-card-band.dn{{background:linear-gradient(90deg,transparent,var(--red),#c84030,var(--red),transparent)}}
-.hero-card-band.fair{{background:linear-gradient(90deg,transparent,var(--gold),var(--g2),var(--gold),transparent)}}
-.hero-card-inner{{display:flex;align-items:stretch;padding:18px 18px 14px;gap:0}}
-.hero-left{{flex:1;min-width:0;padding-right:18px;border-right:1px solid rgba(78,48,16,.4)}}
-.hero-name{{font-size:.96rem;font-weight:600;color:var(--text);letter-spacing:.02em;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
-.hero-ticker{{font-family:'Share Tech Mono',monospace;font-size:.72rem;color:var(--g2);letter-spacing:.14em;margin-bottom:4px}}
-.hero-sector{{font-family:'Share Tech Mono',monospace;font-size:.53rem;color:var(--dim);letter-spacing:.04em}}
-.hero-right{{display:flex;align-items:center;padding-left:18px;flex-shrink:0}}
-.hero-price-block,.hero-comp-block{{text-align:center;padding:0 12px}}
-.hero-price-label{{font-family:'Share Tech Mono',monospace;font-size:.46rem;color:var(--dim);letter-spacing:.14em;text-transform:uppercase;margin-bottom:5px}}
-.hero-price{{font-size:2rem;font-weight:300;color:var(--g3);line-height:1;margin-bottom:3px;text-shadow:0 0 20px rgba(245,204,96,.15)}}
-.hero-comp-val{{font-size:2rem;font-weight:300;color:var(--gold);line-height:1;margin-bottom:3px}}
-.hero-chg{{font-size:.74rem;font-weight:700;font-family:'Share Tech Mono',monospace}}
-.hero-chg.up{{color:var(--green)}}.hero-chg.dn{{color:var(--red)}}
-.hero-margin{{font-size:.66rem;font-weight:700;font-family:'Share Tech Mono',monospace}}
-.hero-margin.up{{color:var(--green)}}.hero-margin.dn{{color:var(--red)}}.hero-margin.fair{{color:var(--g2)}}
-.hero-divider-v{{width:1px;background:rgba(78,48,16,.4);align-self:stretch;margin:0 4px}}
-.hero-verdict{{padding:12px 18px;font-size:.88rem;font-weight:600;letter-spacing:.04em;border-top:1px solid rgba(78,48,16,.3)}}
-.hero-verdict.up{{color:var(--green);background:rgba(58,138,36,.07)}}
-.hero-verdict.dn{{color:var(--red);background:rgba(160,48,32,.07)}}
-.hero-verdict.fair{{color:var(--g2);background:rgba(200,138,26,.07)}}
-.hero-range{{padding:10px 18px 16px}}
-.rng-labels{{display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:.54rem;margin-bottom:5px}}
-.rlo{{color:var(--red)}}.rhi{{color:var(--green)}}.rmid{{color:var(--dim)}}
-.rng-track{{height:6px;border-radius:3px;background:rgba(48,31,12,.8);border:1px solid rgba(78,48,16,.4);position:relative;overflow:visible}}
-.rng-fill{{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--turq),var(--t2));transition:width .9s cubic-bezier(.4,0,.2,1)}}
-.rng-thumb{{position:absolute;top:50%;transform:translate(-50%,-50%);width:14px;height:14px;background:var(--g2);border:2px solid var(--g3);border-radius:50%;transition:left .9s cubic-bezier(.4,0,.2,1);box-shadow:0 0 8px rgba(232,170,52,.4)}}
-.rng-pct{{text-align:center;font-family:'Share Tech Mono',monospace;font-size:.52rem;color:var(--dim);margin-top:5px}}
+/* verdict sentence */
+.vs-verdict{{text-align:center;padding:13px 22px;border-top:0.5px solid var(--line);border-bottom:0.5px solid var(--line)}}
+.vs-verdict.up{{background:rgba(46,160,67,.05)}}.vs-verdict.down{{background:rgba(196,48,43,.05)}}.vs-verdict.fair{{background:rgba(200,144,26,.05)}}
+.vs-verdict-main{{font-size:1rem;font-weight:600;color:var(--w1);letter-spacing:.02em}}
+.vs-verdict-main .hl-up{{color:var(--jade2)}}.vs-verdict-main .hl-down{{color:var(--blood2)}}.vs-verdict-main .hl-fair{{color:var(--gold2)}}
+.vs-verdict-sub{{font-size:.74rem;color:var(--w2);font-style:italic;margin-top:4px;line-height:1.5}}
 
-/* ── HEALTH SCORE ── */
-.health-card{{background:linear-gradient(160deg,rgba(39,25,8,.9),rgba(20,13,5,.95));border:1px solid rgba(110,69,20,.5);border-radius:18px;margin-bottom:13px;overflow:hidden;box-shadow:0 6px 32px rgba(0,0,0,.4)}}
-.health-header{{display:flex;align-items:center;justify-content:space-between;padding:15px 16px 10px}}
-.health-title{{font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--g2);letter-spacing:.16em}}
-.health-grade-wrap{{display:flex;align-items:center;gap:10px}}
-.health-score{{font-size:1.7rem;font-weight:300;color:var(--g3)}}
-.health-grade{{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:700;flex-shrink:0}}
-.health-grade.A{{background:rgba(58,138,36,.2);border:1px solid rgba(58,138,36,.5);color:var(--green)}}
-.health-grade.B{{background:rgba(72,196,174,.12);border:1px solid rgba(72,196,174,.4);color:var(--t3)}}
-.health-grade.C{{background:rgba(200,138,26,.12);border:1px solid rgba(200,138,26,.4);color:var(--g2)}}
-.health-grade.D{{background:rgba(160,48,32,.12);border:1px solid rgba(160,48,32,.4);color:#e08070}}
-.health-grade.F{{background:rgba(160,48,32,.2);border:1px solid rgba(160,48,32,.5);color:var(--red)}}
-.health-bar-wrap{{padding:0 16px 12px}}
-.health-bar-track{{height:5px;border-radius:3px;background:rgba(48,31,12,.8);border:1px solid rgba(78,48,16,.3);overflow:hidden}}
-.health-bar-fill{{height:100%;border-radius:3px;transition:width 1s cubic-bezier(.4,0,.2,1)}}
-.health-bar-fill.A{{background:linear-gradient(90deg,var(--green),#5ab83a)}}
-.health-bar-fill.B{{background:linear-gradient(90deg,var(--turq),var(--t2))}}
-.health-bar-fill.C{{background:linear-gradient(90deg,var(--gold),var(--g2))}}
-.health-bar-fill.D{{background:linear-gradient(90deg,#c84030,var(--red))}}
-.health-bar-fill.F{{background:linear-gradient(90deg,#8a1010,var(--red))}}
-.health-breakdown{{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(78,48,16,.3);border-top:1px solid rgba(78,48,16,.3)}}
-.hb-item{{background:rgba(20,13,5,.8);padding:6px 10px;display:flex;justify-content:space-between;align-items:center}}
-.hb-item:nth-child(4n+1),.hb-item:nth-child(4n+2){{background:rgba(30,19,8,.9)}}
-.hb-key{{font-family:'Share Tech Mono',monospace;font-size:.5rem;color:var(--muted)}}
-.hb-val{{font-family:'Share Tech Mono',monospace;font-size:.56rem;color:var(--text);text-align:right;max-width:55%}}
-.health-flags{{padding:8px 16px 12px;display:flex;flex-wrap:wrap;gap:5px}}
-.health-flag{{background:rgba(160,48,32,.1);border:1px solid rgba(160,48,32,.25);border-radius:20px;padding:2px 9px;font-family:'Share Tech Mono',monospace;font-size:.5rem;color:#e08070}}
-.health-ai-wrap{{padding:0 16px 14px}}
-.health-ai-label{{font-family:'Share Tech Mono',monospace;font-size:.52rem;color:var(--t3);letter-spacing:.12em;margin-bottom:6px}}
-.health-ai-text{{font-size:.82rem;color:var(--sub);line-height:1.8;font-style:italic}}
-.health-ai-loading{{display:flex;align-items:center;gap:6px}}
+/* current price reference row */
+.vs-stats{{display:flex;border-bottom:0.5px solid var(--line)}}
+.vs-stat{{flex:1;text-align:center;padding:13px 8px}}
+.vs-stat + .vs-stat{{border-left:0.5px solid var(--line)}}
+.vs-stat-lbl{{font-family:var(--mono);font-size:.44rem;color:var(--w3);letter-spacing:.1em;margin-bottom:5px}}
+.vs-stat-val{{font-size:1.05rem;font-weight:300;color:var(--w1);font-family:var(--disp)}}
+.vs-stat-val.up{{color:var(--jade)}}.vs-stat-val.down{{color:var(--blood)}}
 
-/* SECTION TITLE */
-.lux-section-title{{font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--g2);letter-spacing:.16em;margin-bottom:9px;display:flex;align-items:center;gap:8px}}
-.lux-section-title::after{{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(110,69,20,.6),transparent)}}
+/* 52-week range */
+.vs-range{{padding:13px 20px 16px;border-bottom:0.5px solid var(--line)}}
+.vs-range-ends{{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.5rem;margin-bottom:8px}}
+.vs-range-lo{{color:var(--blood)}}.vs-range-hi{{color:var(--jade)}}.vs-range-mid{{color:var(--w3);letter-spacing:.08em}}
+.vs-track{{height:2px;background:var(--line3);border-radius:1px;position:relative}}
+.vs-fill{{position:absolute;left:0;top:0;height:2px;background:var(--gold);border-radius:1px;transition:width .9s cubic-bezier(.4,0,.2,1)}}
+.vs-pin{{position:absolute;top:50%;transform:translate(-50%,-50%);width:9px;height:9px;background:var(--gold);border-radius:50%;border:1.5px solid var(--void);transition:left .9s cubic-bezier(.4,0,.2,1)}}
 
-/* FUND GRID */
-.lux-section{{background:linear-gradient(160deg,rgba(39,25,8,.9),rgba(20,13,5,.95));border:1px solid rgba(78,48,16,.5);border-radius:18px;margin-bottom:11px;padding:14px 14px;box-shadow:0 4px 20px rgba(0,0,0,.3)}}
-.fgrid{{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(78,48,16,.3)}}
-.fc{{background:rgba(20,13,5,.8);padding:8px 10px;display:flex;justify-content:space-between;align-items:center}}
-.fc:nth-child(4n+1),.fc:nth-child(4n+2){{background:rgba(30,19,8,.9)}}
-.fl{{font-family:'Share Tech Mono',monospace;font-size:.52rem;color:var(--muted)}}
-.fv{{font-family:'Share Tech Mono',monospace;font-size:.66rem;color:var(--text);font-weight:700}}
+/* ── MODEL MATRIX ── */
+.matrix-head{{display:flex;justify-content:space-between;padding:12px 20px 8px;font-family:var(--mono);font-size:.46rem;color:var(--w3);letter-spacing:.14em}}
+.mx-row{{display:flex;align-items:center;padding:10px 20px;border-top:0.5px solid var(--line);position:relative;overflow:hidden}}
+.mx-bar{{position:absolute;left:0;top:0;bottom:0;border-left:1.5px solid var(--jade);background:rgba(46,160,67,.05);transition:width .8s ease}}
+.mx-bar.down{{border-left-color:var(--blood);background:rgba(196,48,43,.05)}}
+.mx-bar.fair{{border-left-color:var(--gold);background:rgba(200,144,26,.05)}}
+.mx-bar.na{{border-left-color:var(--w4);background:rgba(120,120,120,.03)}}
+.mx-name{{flex:1;font-family:var(--mono);font-size:.55rem;color:var(--w2);letter-spacing:.04em;z-index:1}}
+.mx-val{{font-size:1rem;font-weight:300;font-family:var(--disp);z-index:1;margin-right:11px}}
+.mx-val.up{{color:var(--jade)}}.mx-val.down{{color:var(--blood)}}.mx-val.fair{{color:var(--gold)}}.mx-val.na{{color:var(--w3)}}
+.mx-delta{{font-family:var(--mono);font-size:.5rem;width:52px;text-align:right;z-index:1}}
+.mx-delta.up{{color:var(--jade)}}.mx-delta.down{{color:var(--blood)}}.mx-delta.fair{{color:var(--gold)}}.mx-delta.na{{color:var(--w3)}}
 
-/* MODEL CARDS */
-.mc{{background:linear-gradient(160deg,rgba(39,25,8,.9),rgba(20,13,5,.95));border:1px solid rgba(78,48,16,.45);border-radius:13px;margin-bottom:7px;display:flex;overflow:hidden;transition:all .18s;box-shadow:0 3px 12px rgba(0,0,0,.3)}}
-.mc:hover{{transform:translateY(-1px);border-color:var(--b2);box-shadow:0 6px 24px rgba(0,0,0,.4)}}
-.mbar{{width:3px;flex-shrink:0}}
-.mbar.gold{{background:linear-gradient(180deg,var(--g3),var(--gold))}}
-.mbar.turq{{background:linear-gradient(180deg,var(--t3),var(--turq))}}
-.mbar.muted{{background:linear-gradient(180deg,var(--muted),var(--dim))}}
-.mbody{{padding:10px 14px;flex:1;min-width:0}}
-.mrow{{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:2px}}
-.mname{{font-size:.62rem;font-weight:700;letter-spacing:.07em}}
-.mname.gold{{color:var(--g2)}}.mname.turq{{color:var(--t3)}}.mname.muted{{color:var(--sub)}}
-.mval{{font-size:1.15rem;font-weight:300;white-space:nowrap}}
-.mval.up{{color:var(--green)}}.mval.dn{{color:var(--red)}}.mval.fair{{color:var(--g2)}}.mval.na{{color:var(--dim)}}
-.msig{{font-size:.56rem;font-style:italic;text-align:right;margin-bottom:1px}}
-.msig.up{{color:var(--green)}}.msig.dn{{color:var(--red)}}.msig.fair{{color:var(--gold)}}.msig.na{{color:var(--dim)}}
-.mfm{{font-family:'Share Tech Mono',monospace;font-size:.48rem;color:var(--dim);margin-top:2px}}
-
-/* VERDICT DETAIL */
-.verdict-detail-card{{display:flex;align-items:flex-start;gap:14px;background:linear-gradient(160deg,rgba(39,25,8,.9),rgba(20,13,5,.95));border:1px solid rgba(78,48,16,.45);border-radius:16px;padding:15px 16px;margin-bottom:11px;position:relative;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.3)}}
-.verdict-detail-card::before{{content:'';position:absolute;left:0;top:0;bottom:0;width:3px}}
-.verdict-detail-card.up::before{{background:linear-gradient(180deg,var(--green),#5ab83a)}}
-.verdict-detail-card.dn::before{{background:linear-gradient(180deg,var(--red),#c84030)}}
-.verdict-detail-card.fair::before{{background:linear-gradient(180deg,var(--gold),var(--g2))}}
-.vd-icon{{font-size:1.4rem;opacity:.35;flex-shrink:0;margin-top:2px}}
-.vd-title{{font-size:.96rem;font-weight:600;margin-bottom:5px}}
-.vd-body{{font-size:.78rem;font-style:italic;color:var(--sub);line-height:1.68}}
-
-/* AI CARD */
-.ai-card{{background:linear-gradient(160deg,rgba(20,39,32,.6),rgba(10,25,20,.8));border:1px solid rgba(30,122,106,.35);border-radius:16px;padding:14px 15px;margin-bottom:11px;position:relative;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.3)}}
-.ai-card::before{{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,var(--t3),var(--turq))}}
-.ai-label{{font-family:'Share Tech Mono',monospace;font-size:.54rem;color:var(--t3);letter-spacing:.14em;margin-bottom:7px}}
-.ai-text{{font-size:.84rem;color:var(--sub);line-height:1.82;font-style:italic}}
-.dots{{display:flex;gap:5px;align-items:center}}
-.dot{{width:5px;height:5px;border-radius:50%;background:var(--t2);animation:pulse 1.2s ease-in-out infinite}}
+/* ── AI CARDS ── */
+.ai-block{{margin:13px 14px 0;background:var(--carbon);border:0.5px solid var(--line2);border-radius:18px;overflow:hidden}}
+.ai-head{{display:flex;align-items:center;gap:9px;padding:13px 18px 10px;border-bottom:0.5px solid var(--line)}}
+.ai-ic{{width:22px;height:22px;border-radius:6px;background:rgba(200,144,26,.12);border:0.5px solid var(--gold-dim);display:flex;align-items:center;justify-content:center;font-size:.6rem;color:var(--gold)}}
+.ai-ic.jade{{background:rgba(46,160,67,.1);border-color:rgba(46,160,67,.3);color:var(--jade2)}}
+.ai-title{{font-family:var(--mono);font-size:.54rem;color:var(--w2);letter-spacing:.12em}}
+.ai-body{{padding:14px 18px;font-size:.9rem;color:var(--w2);line-height:1.78;font-style:italic}}
+.ai-loading{{display:flex;align-items:center;gap:7px;padding:14px 18px}}
+.dot{{width:5px;height:5px;border-radius:50%;background:var(--gold);animation:pulse 1.2s ease-in-out infinite}}
 .dot:nth-child(2){{animation-delay:.2s}}.dot:nth-child(3){{animation-delay:.4s}}
 @keyframes pulse{{0%,100%{{opacity:.2}}50%{{opacity:1}}}}
+.ai-loading-txt{{font-family:var(--mono);font-size:.52rem;color:var(--w3);letter-spacing:.06em;margin-left:5px}}
 
-/* ACTIONS */
-.actions{{display:flex;gap:7px;margin-bottom:11px;flex-wrap:wrap}}
-.btn-sm{{background:rgba(39,25,8,.8);border:1px solid rgba(110,69,20,.5);color:var(--sub);border-radius:10px;padding:8px 14px;font-family:'Cormorant Garamond',serif;font-size:.8rem;cursor:pointer;transition:all .2s;letter-spacing:.03em}}
-.btn-sm:hover{{border-color:var(--b2);color:var(--g2);background:rgba(39,25,8,1)}}
-.btn-sm.active{{border-color:var(--t2);color:var(--t3);background:rgba(30,122,106,.12)}}
+/* ── HEALTH CARD ── */
+.health-block{{margin:13px 14px 0;background:var(--carbon);border:0.5px solid var(--line2);border-radius:18px;overflow:hidden}}
+.health-top{{display:flex;align-items:center;justify-content:space-between;padding:15px 18px 12px}}
+.health-title{{font-family:var(--mono);font-size:.54rem;color:var(--w2);letter-spacing:.12em}}
+.health-gr{{display:flex;align-items:center;gap:11px}}
+.health-score{{font-size:1.7rem;font-weight:300;color:var(--w1);font-family:var(--disp)}}
+.health-score small{{font-size:.7rem;color:var(--w3)}}
+.health-grade{{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:1.15rem;font-weight:700;font-family:var(--disp)}}
+.health-grade.A{{background:rgba(46,160,67,.16);border:0.5px solid rgba(46,160,67,.5);color:var(--jade2)}}
+.health-grade.B{{background:rgba(63,191,85,.1);border:0.5px solid rgba(63,191,85,.4);color:var(--jade2)}}
+.health-grade.C{{background:rgba(200,144,26,.13);border:0.5px solid rgba(200,144,26,.45);color:var(--gold2)}}
+.health-grade.D{{background:rgba(196,48,43,.12);border:0.5px solid rgba(196,48,43,.4);color:var(--blood2)}}
+.health-grade.F{{background:rgba(196,48,43,.2);border:0.5px solid rgba(196,48,43,.55);color:var(--blood2)}}
+.health-bar{{height:4px;margin:0 18px 13px;background:var(--line3);border-radius:2px;overflow:hidden}}
+.health-bar-fill{{height:100%;border-radius:2px;transition:width 1s cubic-bezier(.4,0,.2,1)}}
+.health-bar-fill.A,.health-bar-fill.B{{background:linear-gradient(90deg,var(--jade),var(--jade2))}}
+.health-bar-fill.C{{background:linear-gradient(90deg,var(--gold),var(--gold2))}}
+.health-bar-fill.D,.health-bar-fill.F{{background:linear-gradient(90deg,var(--blood),var(--blood2))}}
+.health-grid{{display:grid;grid-template-columns:1fr 1fr;gap:0.5px;background:var(--line);border-top:0.5px solid var(--line)}}
+.hg-item{{background:var(--carbon);padding:7px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px}}
+.hg-k{{font-family:var(--mono);font-size:.5rem;color:var(--w3);letter-spacing:.03em}}
+.hg-v{{font-family:var(--mono);font-size:.54rem;color:var(--w1);text-align:right}}
+.health-flags{{display:flex;flex-wrap:wrap;gap:5px;padding:11px 18px}}
+.health-flag{{background:rgba(196,48,43,.1);border:0.5px solid rgba(196,48,43,.3);border-radius:20px;padding:3px 10px;font-family:var(--mono);font-size:.48rem;color:var(--blood2);letter-spacing:.03em}}
 
-/* COMPARE */
-.cmp-bar{{background:var(--panel);padding:11px 13px 0;border-bottom:1px solid var(--border);display:none}}
-.cmp-bar.on{{display:block}}
-.cmp-row{{display:flex;gap:7px;align-items:center}}
-.cmp-input{{flex:1;min-width:0;background:var(--card);border:1px solid var(--b2);border-radius:9px;padding:8px 10px;color:var(--g3);font-family:'Cormorant Garamond',serif;font-size:1rem;font-weight:600;text-align:center;letter-spacing:.1em;outline:none}}
-.cmp-input::placeholder{{color:var(--dim);font-size:.78rem;font-weight:400;letter-spacing:0}}
-.btn-cmp{{background:var(--gold);color:var(--bg);border:none;border-radius:9px;font-family:'Cormorant Garamond',serif;font-size:.86rem;font-weight:600;padding:9px 13px;cursor:pointer;white-space:nowrap;flex-shrink:0}}
-.btn-cmp:hover{{background:var(--g2)}}
-.cmp-hint{{font-size:.57rem;color:var(--dim);font-style:italic;padding:4px 0 9px;text-align:center}}
-.cmp-grid{{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:11px}}
-.cmp-col{{background:linear-gradient(160deg,var(--card2),var(--card));border:1px solid var(--border);border-radius:13px;overflow:hidden}}
-.cmp-col.win{{background:rgba(30,122,106,.1);border-color:var(--t2)}}
-.cmp-hdr{{padding:9px 11px;border-bottom:1px solid var(--border)}}
-.cmp-tkr{{font-size:1.15rem;font-weight:600;color:var(--g3);letter-spacing:.1em}}
-.cmp-nm{{font-size:.58rem;color:var(--sub);font-style:italic;margin-top:1px}}
-.cmp-px{{font-size:1.2rem;font-weight:300;color:var(--g3);margin:3px 0}}
-.cmp-r{{display:flex;justify-content:space-between;padding:5px 11px;border-bottom:1px solid var(--border)}}
-.cmp-r:last-child{{border:none}}
-.cl{{color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.52rem}}
-.cv{{color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.61rem;font-weight:700}}
-.cmp-vd{{padding:8px 11px;font-size:.72rem;font-weight:600}}
-.cmp-vd.up{{color:var(--green)}}.cmp-vd.dn{{color:var(--red)}}.cmp-vd.fair{{color:var(--g2)}}
+/* action buttons */
+.actions{{display:flex;gap:7px;margin:13px 14px 0}}
+.act-btn{{flex:1;height:42px;background:var(--carbon);border:0.5px solid var(--line2);border-radius:11px;color:var(--w2);font-family:var(--mono);font-size:.54rem;letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s}}
+.act-btn:active{{opacity:.7}}
+.act-btn.saved{{border-color:var(--gold-dim);color:var(--gold);background:rgba(200,144,26,.06)}}
 
-/* SEC DIVIDER */
-.sec{{display:flex;align-items:center;gap:9px;font-family:'Share Tech Mono',monospace;font-size:.56rem;color:var(--muted);letter-spacing:.13em;margin:15px 0 7px}}
-.sec::before,.sec::after{{content:'';flex:1;height:1px}}
-.sec::before{{background:linear-gradient(90deg,transparent,var(--border))}}
-.sec::after{{background:linear-gradient(90deg,var(--border),transparent)}}
+/* ── SECTION RAILS ── */
+.rail-head{{display:flex;align-items:center;justify-content:space-between;padding:22px 20px 11px}}
+.rail-title{{font-family:var(--mono);font-size:.5rem;color:var(--w3);letter-spacing:.18em}}
+.rail-act{{font-family:var(--mono);font-size:.46rem;color:var(--gold-dim);letter-spacing:.07em;display:flex;align-items:center;gap:4px;cursor:pointer}}
+.rail{{display:flex;gap:7px;padding:0 18px 4px;overflow-x:auto}}
+.rail-card{{flex-shrink:0;background:var(--carbon);border:0.5px solid var(--line);border-radius:13px;padding:11px 14px;min-width:84px;cursor:pointer;position:relative;overflow:hidden;transition:border-color .15s}}
+.rail-card:active{{border-color:var(--gold-dim)}}
+.rail-card::after{{content:'';position:absolute;bottom:0;left:0;right:0;height:1.5px;background:var(--line2)}}
+.rail-card.up::after{{background:var(--jade)}}.rail-card.dn::after{{background:var(--blood)}}
+.rail-sym{{font-family:var(--mono);font-size:.56rem;color:var(--w2);letter-spacing:.06em;margin-bottom:5px}}
+.rail-px{{font-size:.95rem;font-weight:300;color:var(--w1);font-family:var(--disp)}}
+.rail-chg{{font-family:var(--mono);font-size:.48rem;margin-top:3px}}
+.rail-shimmer{{display:inline-block;background:var(--slate);border-radius:3px;animation:shimmer 1.3s ease-in-out infinite}}
+@keyframes shimmer{{0%,100%{{opacity:.3}}50%{{opacity:.7}}}}
+.up{{color:var(--jade)}}.dn{{color:var(--blood)}}
+.rail-rm{{position:absolute;top:6px;right:7px;font-size:.6rem;color:var(--w3);cursor:pointer;line-height:1;padding:2px}}
+.rail-rm:hover{{color:var(--blood)}}
 
-/* SPINNER */
-.spinner{{text-align:center;padding:50px 0;display:none}}.spinner.on{{display:block}}
-.ring{{width:40px;height:40px;border:2px solid var(--b2);border-top-color:var(--t2);border-radius:50%;display:inline-block;animation:spin 1s linear infinite}}
-@keyframes spin{{to{{transform:rotate(360deg)}}}}
-.spin-txt{{font-size:.74rem;color:var(--sub);font-style:italic;margin-top:9px}}
+/* watchlist analyze hint */
+.wl-empty-note{{font-size:.72rem;color:var(--w3);font-style:italic;padding:0 20px 4px;line-height:1.6}}
 
-/* ERR */
-.err{{background:var(--card);border:1px solid var(--red);border-left:4px solid var(--red);border-radius:13px;padding:15px 17px;margin-bottom:11px}}
-.err-title{{font-size:.92rem;font-weight:600;color:var(--red);margin-bottom:5px}}
-.err-body{{font-size:.8rem;color:var(--sub);line-height:1.7}}
-.etf-tag{{display:inline-block;background:rgba(30,122,106,.2);border:1px solid var(--t2);border-radius:5px;padding:1px 7px;font-family:'Share Tech Mono',monospace;font-size:.53rem;color:var(--t3);letter-spacing:.07em;margin-bottom:5px}}
-.hidden{{display:none!important}}
+/* ── MASTERS ── */
+.masters{{display:flex;gap:8px;padding:0 18px 4px;overflow-x:auto}}
+.master{{flex-shrink:0;width:128px;background:var(--carbon);border:0.5px solid var(--line);border-radius:15px;padding:14px 13px 13px;cursor:pointer;transition:border-color .15s}}
+.master:active{{border-color:var(--gold-dim)}}
+.master-top{{display:flex;align-items:center;gap:10px;margin-bottom:10px}}
+.master-medal{{width:38px;height:38px;border-radius:50%;background:radial-gradient(circle at 35% 30%,var(--slate2),var(--obsidian));border:0.5px solid var(--gold-dim);display:flex;align-items:center;justify-content:center;font-size:.92rem;font-weight:300;color:var(--gold);font-family:var(--disp);flex-shrink:0}}
+.master-name{{font-size:.74rem;color:var(--w1);line-height:1.2;font-weight:500}}
+.master-years{{font-family:var(--mono);font-size:.42rem;color:var(--w3);letter-spacing:.05em;margin-top:2px}}
+.master-tag{{font-family:var(--mono);font-size:.44rem;color:var(--gold-dim);letter-spacing:.05em;margin-bottom:8px}}
+.master-bio{{font-size:.66rem;color:var(--w2);line-height:1.6;font-style:italic}}
+.master-quote{{font-size:.66rem;color:var(--gold-dim);font-style:italic;line-height:1.55;margin-top:9px;padding-top:9px;border-top:0.5px solid var(--line)}}
 
-/* MODALS */
-.overlay{{position:fixed;inset:0;background:rgba(0,0,0,.88);backdrop-filter:blur(6px);z-index:1000;display:none;align-items:center;justify-content:center;padding:16px}}
-.overlay.on{{display:flex}}
-.modal{{background:var(--panel);border:1px solid var(--gold);border-radius:20px;max-width:390px;width:100%;overflow:hidden;animation:slideUp .3s cubic-bezier(.22,1,.36,1);max-height:92vh;overflow-y:auto}}
-@keyframes slideUp{{from{{opacity:0;transform:translateY(28px)}}to{{opacity:1;transform:translateY(0)}}}}
-.mband{{height:3px;background:linear-gradient(90deg,var(--gold),var(--t2),var(--g3))}}
-.mbody{{padding:22px 20px 24px}}
-.mgem{{width:44px;height:44px;background:linear-gradient(135deg,var(--g2),var(--g3));transform:rotate(45deg);display:flex;align-items:center;justify-content:center;margin:0 auto 14px}}
-.mgem span{{transform:rotate(-45deg);font-size:.85rem;color:var(--bg)}}
-.mtitle{{text-align:center;font-size:1.35rem;font-weight:300;color:var(--g3);letter-spacing:.13em;margin-bottom:5px}}
-.msub{{text-align:center;font-size:.76rem;color:var(--sub);font-style:italic;line-height:1.7;margin-bottom:18px}}
-.mprice{{text-align:center;margin-bottom:16px}}
-.mprice-num{{font-size:2.3rem;font-weight:300;color:var(--g3)}}
-.mprice-per{{font-size:.84rem;color:var(--sub);font-style:italic}}
-.mfeatures{{list-style:none;margin-bottom:18px;display:flex;flex-direction:column;gap:6px}}
-.mfeatures li{{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--sub);font-style:italic}}
-.mfeatures li::before{{content:'◆';color:var(--g2);font-size:.48rem;flex-shrink:0}}
-.btn-big{{width:100%;background:linear-gradient(135deg,var(--turq),var(--t2));color:var(--bg);border:none;border-radius:13px;padding:13px;font-family:'Cormorant Garamond',serif;font-size:.97rem;font-weight:600;letter-spacing:.07em;cursor:pointer;transition:all .22s;margin-bottom:7px;display:block;text-align:center}}
-.btn-big:hover{{transform:translateY(-1px);opacity:.92}}
-.btn-big:disabled{{background:var(--muted);cursor:default;transform:none}}
-.btn-ghost-modal{{width:100%;background:transparent;color:var(--dim);border:none;font-family:'Cormorant Garamond',serif;font-size:.76rem;font-style:italic;cursor:pointer;padding:4px}}
-.btn-ghost-modal:hover{{color:var(--sub)}}
-.afield{{margin-bottom:12px}}
-.albl{{font-family:'Share Tech Mono',monospace;font-size:.54rem;color:var(--muted);letter-spacing:.09em;margin-bottom:4px;display:block}}
-.ainput{{width:100%;background:var(--card);border:1px solid var(--b2);border-radius:9px;padding:10px 12px;color:var(--text);font-family:'Cormorant Garamond',serif;font-size:.97rem;outline:none;transition:border-color .2s}}
-.ainput:focus{{border-color:var(--t2)}}
-.aerror{{font-size:.72rem;color:var(--red);font-style:italic;text-align:center;margin-bottom:8px;min-height:17px}}
-.aswitch{{text-align:center;font-size:.74rem;color:var(--dim);font-style:italic;margin-top:8px}}
-.aswitch a{{color:var(--g2);cursor:pointer}}
-.acct-email{{font-family:'Share Tech Mono',monospace;font-size:.56rem;color:var(--dim);text-align:center;margin-bottom:12px}}
-.toast{{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(70px);background:var(--green);color:#fff;border-radius:11px;padding:10px 18px;font-size:.8rem;font-style:italic;z-index:2000;opacity:0;transition:all .35s cubic-bezier(.22,1,.36,1);white-space:nowrap;max-width:88vw;text-align:center}}
-.toast.on{{opacity:1;transform:translateX(-50%) translateY(0)}}
-.price-card{{background:var(--card);border:1px solid var(--gold);border-radius:16px;overflow:hidden;margin-bottom:11px}}
-.price-band{{height:2px;background:linear-gradient(90deg,var(--gold),var(--t2),var(--g3))}}
-.price-inner{{padding:18px 16px}}
-.price-title{{font-size:.68rem;color:var(--gold);font-weight:600;letter-spacing:.11em;margin-bottom:10px}}
-.price-amt{{font-size:2.1rem;font-weight:300;color:var(--g3);margin-bottom:2px}}
-.price-note{{font-size:.68rem;color:var(--sub);font-style:italic;margin-bottom:14px}}
-/* about */
-.form-card{{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--t2);border-radius:0 9px 9px 0;padding:10px 13px;margin-bottom:7px}}
-.fn{{font-size:.76rem;color:var(--g2);font-weight:600;margin-bottom:2px;letter-spacing:.04em}}
-.feq{{font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--t3);margin-bottom:2px}}
-.fdesc{{font-size:.68rem;color:var(--muted);font-style:italic;line-height:1.6}}
-.disc-box{{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-top:11px}}
-.disc-box p{{font-size:.62rem;color:var(--dim);font-style:italic;line-height:1.8}}
-.about-page{{padding:0 0 40px}}
-.about-hero{{background:linear-gradient(180deg,var(--card2) 0%,var(--bg) 100%);border-bottom:1px solid var(--border);padding:36px 20px 32px;text-align:center;position:relative;overflow:hidden}}
-.about-hero::before{{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(200,138,26,.07),transparent 70%);pointer-events:none}}
-.about-hero-gem{{width:60px;height:60px;background:linear-gradient(135deg,var(--gold),var(--g3),var(--g2));transform:rotate(45deg);display:flex;align-items:center;justify-content:center;margin:0 auto 22px;box-shadow:0 0 50px rgba(232,170,52,.25),0 0 0 1px rgba(245,204,96,.25),inset 0 1px 0 rgba(255,255,255,.15);animation:gem-spin 12s linear infinite}}
+/* ── ABOUT PANE ── */
+.about-pane{{padding:20px 18px 30px}}
+.about-gem-wrap{{text-align:center;margin:10px 0 22px}}
+.about-gem{{width:56px;height:56px;background:linear-gradient(135deg,var(--gold),var(--gold3));transform:rotate(45deg);display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 40px rgba(200,144,26,.25);animation:gem-spin 14s linear infinite}}
+.about-gem::after{{content:'◆';transform:rotate(-45deg);font-size:.85rem;color:#000;font-weight:900;animation:gem-spin-i 14s linear infinite}}
 @keyframes gem-spin{{0%{{transform:rotate(45deg)}}100%{{transform:rotate(405deg)}}}}
-.about-hero-gem span{{animation:gem-spin-inner 12s linear infinite}}
-@keyframes gem-spin-inner{{0%{{transform:rotate(-45deg)}}100%{{transform:rotate(-405deg)}}}}
-.about-hero-gem span{{transform:rotate(-45deg);font-size:1rem;color:var(--bg);font-weight:700}}
-.about-hero-title{{font-size:2.6rem;font-weight:300;color:var(--g3);letter-spacing:.35em;margin-bottom:4px;position:relative;z-index:1}}
-.about-hero-sub{{font-size:.78rem;color:var(--sub);font-style:italic;letter-spacing:.18em;margin-bottom:22px;position:relative;z-index:1;font-family:'Share Tech Mono',monospace}}
-.about-hero-rule{{width:120px;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:0 auto 22px}}
-.about-hero-pitch{{max-width:480px;margin:0 auto;font-size:.9rem;color:var(--sub);line-height:1.85;font-style:italic;position:relative;z-index:1}}
-.about-section-label{{font-family:'Share Tech Mono',monospace;font-size:.58rem;color:var(--muted);letter-spacing:.18em;padding:22px 18px 10px;display:flex;align-items:center;gap:10px}}
-.about-section-label::after{{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent)}}
-.about-features{{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 14px 4px}}
-.af-card{{background:linear-gradient(160deg,var(--card2),var(--card));border:1px solid var(--border);border-radius:16px;padding:16px 14px 14px;position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s}}
-.af-card:hover{{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.3)}}
-.af-card::before{{content:'';position:absolute;top:0;left:0;right:0;height:2px}}
-.af-card.af-gold::before{{background:linear-gradient(90deg,var(--gold),var(--g2))}}
-.af-card.af-turq::before{{background:linear-gradient(90deg,var(--turq),var(--t2))}}
-.af-card.af-muted::before{{background:linear-gradient(90deg,var(--muted),var(--dim))}}
-.af-icon{{font-size:1.3rem;margin-bottom:8px;opacity:.85}}
-.af-title{{font-family:'Share Tech Mono',monospace;font-size:.58rem;font-weight:700;letter-spacing:.1em;margin-bottom:7px}}
-.af-card.af-gold .af-title{{color:var(--g2)}}
-.af-card.af-turq .af-title{{color:var(--t3)}}
-.af-card.af-muted .af-title{{color:var(--sub)}}
-.af-body{{font-size:.72rem;color:var(--sub);line-height:1.7;margin-bottom:10px;font-style:italic}}
-.af-formula{{font-family:'Share Tech Mono',monospace;font-size:.5rem;color:var(--dim);border-top:1px solid var(--border);padding-top:8px;letter-spacing:.04em}}
-.about-model-card{{display:flex;margin:0 14px 8px;background:linear-gradient(160deg,var(--card2),var(--card));border:1px solid var(--border);border-radius:13px;overflow:hidden;transition:transform .15s}}
-.about-model-card:hover{{transform:translateX(2px)}}
-.amc-left{{width:3px;flex-shrink:0}}
-.amc-left.gold{{background:linear-gradient(180deg,var(--g3),var(--gold))}}
-.amc-left.turq{{background:linear-gradient(180deg,var(--t3),var(--turq))}}
-.amc-left.muted{{background:linear-gradient(180deg,var(--muted),var(--dim))}}
-.amc-body{{padding:12px 14px;flex:1}}
-.amc-name{{font-size:.78rem;font-weight:600;color:var(--g2);letter-spacing:.05em;margin-bottom:3px}}
-.amc-eq{{font-family:'Share Tech Mono',monospace;font-size:.58rem;color:var(--t3);margin-bottom:6px}}
-.amc-desc{{font-size:.7rem;color:var(--sub);font-style:italic;line-height:1.65}}
-.about-pricing{{margin:0 14px 14px;background:linear-gradient(160deg,var(--card2),var(--card));border:1px solid var(--gold);border-radius:16px;overflow:hidden;display:flex;align-items:stretch}}
-.ap-left{{padding:22px 20px;text-align:center;flex-shrink:0;display:flex;flex-direction:column;justify-content:center;background:rgba(200,138,26,.06)}}
-.ap-price{{font-size:2.4rem;font-weight:300;color:var(--g3);line-height:1}}
-.ap-per{{font-size:.9rem;color:var(--sub)}}
-.ap-cancel{{font-size:.58rem;color:var(--dim);font-style:italic;margin-top:4px;font-family:'Share Tech Mono',monospace;letter-spacing:.04em}}
-.ap-divider{{width:1px;background:var(--border);flex-shrink:0}}
-.ap-features{{padding:16px 18px;display:flex;flex-direction:column;gap:7px;justify-content:center}}
-.ap-feat{{font-size:.76rem;color:var(--sub);font-style:italic}}
-.about-subscribe-btn{{display:block;width:calc(100% - 28px);margin:0 14px 20px;background:linear-gradient(135deg,var(--turq),var(--t2));color:var(--bg);border:none;border-radius:13px;padding:15px;font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;letter-spacing:.08em;cursor:pointer;transition:all .22s;box-shadow:0 4px 20px rgba(30,122,106,.25)}}
-.about-subscribe-btn:hover{{transform:translateY(-1px);box-shadow:0 8px 28px rgba(30,122,106,.35)}}
-.about-disc{{margin:0 14px;font-size:.62rem;color:var(--dim);font-style:italic;line-height:1.8;text-align:center;padding:14px;border-top:1px solid var(--border)}}
-/* ── WATCHLIST PAGE ── */
-.wl-page{{padding:0 0 40px}}
-.wl-page-hero{{background:linear-gradient(160deg,var(--card2) 0%,var(--card) 100%);border-bottom:1px solid var(--b2);padding:18px 16px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}}
-.wl-page-hero-left{{display:flex;flex-direction:column;gap:3px}}
-.wl-page-title{{font-size:1.35rem;font-weight:300;color:var(--g3);letter-spacing:.18em}}
-.wl-page-sub{{font-family:'Share Tech Mono',monospace;font-size:.56rem;color:var(--dim);letter-spacing:.06em}}
-.wl-refresh-btn{{background:rgba(30,122,106,.15);border:1px solid var(--turq);border-radius:9px;color:var(--t3);font-family:'Share Tech Mono',monospace;font-size:.54rem;letter-spacing:.07em;padding:7px 11px;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}}
-.wl-refresh-btn:hover{{background:rgba(30,122,106,.3);transform:translateY(-1px)}}
-.wl-refresh-btn:disabled{{opacity:.45;cursor:default;transform:none}}
-.wl-section-label{{font-family:'Share Tech Mono',monospace;font-size:.58rem;color:var(--muted);letter-spacing:.12em;padding:16px 16px 9px;display:flex;align-items:center;gap:9px}}
-.wl-section-label::after{{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent)}}
-.wl-section-hint{{font-size:.72rem;color:var(--dim);font-style:italic;line-height:1.7;padding:0 16px 14px}}
-.wl-cards{{display:flex;flex-direction:column;gap:0;padding:0 12px}}
-/* individual card — full-width row layout */
-.wl-card{{background:linear-gradient(160deg,var(--card2),var(--card));border:1px solid var(--border);border-radius:16px;margin-bottom:9px;overflow:hidden;transition:all .18s;position:relative}}
-.wl-card:hover{{border-color:var(--b2);box-shadow:0 6px 28px rgba(0,0,0,.4);transform:translateY(-1px)}}
-.wl-card-accent{{height:2px;width:100%}}
-.wl-card-accent.gold{{background:linear-gradient(90deg,var(--gold),var(--g2),var(--gold))}}
-.wl-card-accent.turq{{background:linear-gradient(90deg,var(--turq),var(--t2),var(--turq))}}
-.wl-card-accent.muted{{background:linear-gradient(90deg,var(--muted),var(--dim),var(--muted))}}
-.wl-card-body{{padding:13px 14px 12px;display:flex;align-items:center;gap:12px}}
-.wl-card-left{{flex:1;min-width:0}}
-.wl-card-ticker{{font-family:'Share Tech Mono',monospace;font-size:.82rem;color:var(--g3);letter-spacing:.1em;font-weight:700}}
-.wl-card-name{{font-size:.68rem;color:var(--sub);font-style:italic;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
-.wl-card-center{{text-align:right;flex-shrink:0}}
-.wl-card-price{{font-size:1.45rem;font-weight:300;color:var(--g3);line-height:1;font-family:'Cormorant Garamond',serif}}
-.wl-card-chg{{font-family:'Share Tech Mono',monospace;font-size:.6rem;font-weight:700;margin-top:3px}}
-.wl-card-chg.up{{color:var(--green)}}.wl-card-chg.dn{{color:var(--red)}}.wl-card-chg.neutral{{color:var(--dim)}}
-.wl-card-price-loading{{font-family:'Share Tech Mono',monospace;font-size:.58rem;color:var(--dim);font-style:italic}}
-.wl-card-right{{display:flex;flex-direction:column;gap:5px;flex-shrink:0;padding-left:10px;border-left:1px solid var(--border)}}
-.wl-btn-analyze{{background:linear-gradient(135deg,var(--turq),var(--t2));color:var(--bg);border:none;border-radius:8px;font-family:'Cormorant Garamond',serif;font-size:.78rem;font-weight:600;padding:7px 12px;cursor:pointer;letter-spacing:.05em;transition:all .18s;white-space:nowrap}}
-.wl-btn-analyze:hover{{opacity:.88;transform:translateY(-1px)}}
-.wl-btn-remove{{background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.54rem;padding:5px 10px;cursor:pointer;transition:all .18s;white-space:nowrap}}
-.wl-btn-remove:hover{{border-color:var(--red);color:var(--red)}}
-.wl-footer{{padding:14px 12px 0;display:flex;gap:8px}}
-.wl-clear-btn{{flex:1;background:transparent;border:1px solid var(--border);border-radius:10px;color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.56rem;letter-spacing:.07em;padding:10px;cursor:pointer;transition:all .2s}}
-.wl-clear-btn:hover{{border-color:var(--red);color:var(--red)}}
-/* price skeleton shimmer */
-@keyframes shimmer{{0%{{opacity:.3}}50%{{opacity:.7}}100%{{opacity:.3}}}}
-.wl-shimmer{{animation:shimmer 1.4s ease-in-out infinite;background:var(--card3);border-radius:4px;display:inline-block}}
-/* Quotes section */
-.wl-portraits-section{{padding:0 14px 40px}}
-.wl-portraits-sub{{font-size:.78rem;color:var(--dim);font-style:italic;padding:4px 0 18px;line-height:1.6}}
+@keyframes gem-spin-i{{0%{{transform:rotate(-45deg)}}100%{{transform:rotate(-405deg)}}}}
+.about-title{{text-align:center;font-size:1.4rem;font-weight:300;color:var(--gold3);letter-spacing:.3em;margin-bottom:6px}}
+.about-tag{{text-align:center;font-family:var(--mono);font-size:.5rem;color:var(--w3);letter-spacing:.12em;margin-bottom:20px}}
+.about-body{{font-size:.92rem;color:var(--w2);line-height:1.85;font-style:italic;margin-bottom:20px;text-align:center}}
+.formula-card{{background:var(--carbon);border:0.5px solid var(--line);border-left:2px solid var(--gold-dim);border-radius:0 11px 11px 0;padding:12px 15px;margin-bottom:8px}}
+.formula-name{{font-size:.85rem;color:var(--gold2);font-weight:500;margin-bottom:3px;letter-spacing:.03em}}
+.formula-eq{{font-family:var(--mono);font-size:.56rem;color:var(--jade2);margin-bottom:4px}}
+.formula-desc{{font-size:.74rem;color:var(--w3);font-style:italic;line-height:1.55}}
+.about-pricing{{background:radial-gradient(ellipse at top,var(--graphite),var(--obsidian));border:0.5px solid var(--gold-dim);border-radius:18px;padding:22px 20px;text-align:center;margin:22px 0 14px}}
+.about-price{{font-size:2.4rem;font-weight:300;color:var(--gold3);line-height:1}}
+.about-price small{{font-size:.8rem;color:var(--w3)}}
+.about-price-note{{font-family:var(--mono);font-size:.5rem;color:var(--w3);letter-spacing:.08em;margin:8px 0 16px}}
+.about-sub-btn{{width:100%;height:48px;background:linear-gradient(135deg,var(--gold),var(--gold3));border:none;border-radius:12px;font-family:var(--mono);font-size:.64rem;font-weight:700;color:#000;letter-spacing:.12em;cursor:pointer}}
+.disc{{background:var(--carbon);border:0.5px solid var(--line);border-radius:11px;padding:13px 15px;margin-top:14px}}
+.disc p{{font-size:.62rem;color:var(--w3);font-style:italic;line-height:1.7}}
 
-/* Investor Portrait Card */
-.ipc{{background:var(--ipc-bg,rgba(39,25,8,.6));border:1px solid var(--ipc-border,rgba(78,48,16,.4));border-radius:20px;padding:0;margin-bottom:13px;overflow:hidden;transition:transform .2s,box-shadow .2s;box-shadow:0 4px 24px rgba(0,0,0,.35)}}
-.ipc:hover{{transform:translateY(-2px);box-shadow:0 10px 40px rgba(0,0,0,.5)}}
+/* ── DOCK ── */
+.dock{{position:sticky;bottom:0;display:flex;margin:14px 14px 0;margin-bottom:max(14px,var(--safe-b));background:rgba(10,10,10,.96);backdrop-filter:blur(20px);border:0.5px solid var(--line2);border-radius:16px;padding:6px;gap:4px;z-index:90}}
+.dock-item{{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0;border-radius:11px;cursor:pointer;min-height:50px;justify-content:center;transition:background .15s}}
+.dock-item.on{{background:var(--slate)}}
+.dock-ic{{font-size:1.05rem;line-height:1;color:var(--w3)}}
+.dock-lb{{font-family:var(--mono);font-size:.42rem;color:var(--w3);letter-spacing:.06em}}
+.dock-item.on .dock-ic,.dock-item.on .dock-lb{{color:var(--gold)}}
 
-/* Head row */
-.ipc-head{{display:flex;align-items:center;gap:16px;padding:18px 18px 14px}}
+/* panes */
+.pane{{min-height:50vh}}
 
-/* Medallion */
-.ipc-medallion{{flex-shrink:0;width:62px;height:62px;position:relative;display:flex;align-items:center;justify-content:center}}
-.ipc-ring{{position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--ipc-border,rgba(78,48,16,.5));background:radial-gradient(circle at 35% 35%,rgba(255,255,255,.06),transparent 60%),linear-gradient(135deg,rgba(20,13,5,.95),rgba(39,25,8,.9));box-shadow:0 0 0 1px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.06)}}
-.ipc-initials{{position:relative;z-index:1;font-family:'Cormorant Garamond',serif;font-size:1.5rem;font-weight:600;color:var(--ipc-text,#e8aa34);letter-spacing:.05em;text-shadow:0 0 20px var(--ipc-border,rgba(200,138,26,.4))}}
+/* ── TOAST ── */
+.toast{{position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(20px);background:var(--slate);border:0.5px solid var(--gold-dim);border-radius:11px;padding:11px 18px;font-family:var(--mono);font-size:.58rem;color:var(--gold2);letter-spacing:.04em;opacity:0;pointer-events:none;transition:all .3s;z-index:300;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis}}
+.toast.on{{opacity:1;transform:translateX(-50%) translateY(0)}}
 
-/* Identity */
-.ipc-ident{{flex:1;min-width:0}}
-.ipc-name{{font-size:1.08rem;font-weight:600;color:var(--text);letter-spacing:.03em;margin-bottom:2px;line-height:1.2}}
-.ipc-title{{font-size:.68rem;color:var(--ipc-text,#e8aa34);font-style:italic;margin-bottom:3px;letter-spacing:.03em}}
-.ipc-years{{font-family:'Share Tech Mono',monospace;font-size:.5rem;color:var(--dim);letter-spacing:.1em}}
+/* ── MODALS ── */
+.modal{{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;z-index:400;padding:20px}}
+.modal.on{{display:flex}}
+.modal-card{{background:var(--graphite);border:0.5px solid var(--line2);border-radius:20px;padding:24px 22px;width:100%;max-width:340px;position:relative}}
+.modal-card::before{{content:'';position:absolute;top:0;left:20px;right:20px;height:1px;background:linear-gradient(90deg,transparent,var(--gold-dim),transparent)}}
+.modal-title{{font-size:1.2rem;font-weight:300;color:var(--gold3);letter-spacing:.08em;text-align:center;margin-bottom:5px}}
+.modal-sub{{font-family:var(--mono);font-size:.52rem;color:var(--w3);text-align:center;letter-spacing:.06em;margin-bottom:18px}}
+.modal-input{{width:100%;height:46px;background:var(--obsidian);border:0.5px solid var(--line2);border-radius:11px;padding:0 15px;color:var(--w1);font-family:var(--mono);font-size:.72rem;outline:none;margin-bottom:10px;transition:border-color .15s}}
+.modal-input:focus{{border-color:var(--gold-dim)}}
+.modal-input::placeholder{{color:var(--w4)}}
+.btn-big{{width:100%;height:48px;background:linear-gradient(135deg,var(--gold),var(--gold3));border:none;border-radius:12px;font-family:var(--mono);font-size:.62rem;font-weight:700;color:#000;letter-spacing:.1em;cursor:pointer;margin-top:6px}}
+.btn-ghost-modal{{width:100%;height:42px;background:transparent;border:0.5px solid var(--line2);border-radius:11px;color:var(--w2);font-family:var(--mono);font-size:.56rem;letter-spacing:.06em;cursor:pointer;margin-top:8px}}
+.modal-switch{{text-align:center;font-size:.74rem;color:var(--w3);font-style:italic;margin-top:14px}}
+.modal-err{{font-family:var(--mono);font-size:.5rem;color:var(--blood2);text-align:center;min-height:16px;margin-bottom:6px;letter-spacing:.03em}}
+.modal-acct-email{{font-family:var(--mono);font-size:.66rem;color:var(--gold2);text-align:center;letter-spacing:.04em;margin-bottom:6px}}
+.modal-acct-status{{font-family:var(--mono);font-size:.5rem;text-align:center;letter-spacing:.08em;margin-bottom:18px}}
+.modal-acct-status.pro{{color:var(--jade2)}}.modal-acct-status.free{{color:var(--w3)}}
 
-/* Stat pills */
-.ipc-stats{{display:flex;flex-wrap:wrap;gap:5px;padding:0 18px 14px}}
-.ipc-stat{{background:var(--ipc-bg,rgba(39,25,8,.6));border:1px solid var(--ipc-border,rgba(78,48,16,.35));border-radius:20px;padding:3px 10px;font-family:'Share Tech Mono',monospace;font-size:.5rem;color:var(--ipc-text,#e8aa34);letter-spacing:.07em;white-space:nowrap}}
-
-/* Bio */
-.ipc-bio{{font-size:.82rem;color:var(--sub);line-height:1.75;padding:0 18px 14px;border-top:1px solid rgba(78,48,16,.2);padding-top:13px}}
-
-/* Quote */
-.ipc-quote{{font-size:.82rem;color:var(--ipc-text,#e8aa34);font-style:italic;line-height:1.7;padding:12px 18px 16px;border-top:1px solid var(--ipc-border,rgba(78,48,16,.2));opacity:.85}}
-
-.tabs{{box-shadow:0 2px 12px rgba(0,0,0,.2)}}
-.mc{{box-shadow:0 2px 8px rgba(0,0,0,.2)}}
-.health-card{{box-shadow:0 4px 20px rgba(0,0,0,.25)}}
-.hero-card{{box-shadow:0 12px 48px rgba(0,0,0,.5),inset 0 1px 0 rgba(232,170,52,.1)}}
-.verdict-detail-card{{box-shadow:0 4px 18px rgba(0,0,0,.2)}}
-.ai-card{{box-shadow:0 4px 18px rgba(0,0,0,.2)}}
-.modal{{box-shadow:0 24px 80px rgba(0,0,0,.6)}}
-.empty-tile{{transition:transform .2s}}.empty-tile:hover{{transform:translateY(-2px)}}
-
+/* paywall */
+.paywall-feats{{margin:14px 0 18px}}
+.pf-row{{display:flex;align-items:center;gap:9px;padding:6px 0;font-size:.8rem;color:var(--w2)}}
+.pf-check{{color:var(--jade2);font-size:.7rem}}
+.modal-price{{text-align:center;margin:8px 0 16px}}
+.modal-price-num{{font-size:2.2rem;font-weight:300;color:var(--gold3);line-height:1}}
+.modal-price-per{{font-family:var(--mono);font-size:.5rem;color:var(--w3);letter-spacing:.06em;margin-top:5px}}
 </style>
 </head>
 <body>
-
-<!-- HERO PAGE -->
-<div id="hero" class="hero">
-  <div class="hero-bg"></div>
-  <div class="hero-gem"><span>◆</span></div>
-  <div class="hero-title">SENECA</div>
-  <div class="hero-sub">Intrinsic Value Oracle</div>
-  <div class="hero-rule"></div>
-  <div class="hero-pitch">Six <strong>classical valuation models</strong> — Graham, Buffett, Lynch and more — synthesised into one verdict. Stocks, ETFs and indexes. No noise. Just <strong>what it's actually worth.</strong></div>
-  <div class="hero-btns">
-    <button class="btn-teal" onclick="enterApp()">◈ &nbsp;Try Free Lookup</button>
-    <button class="btn-outline" onclick="clickSubscribe()">✦ &nbsp;Subscribe — $3.99/mo</button>
+<!-- BODY CONTENT INJECTED IN PART 2 -->
+<div class="cmd-bar">
+  <div class="cmd-id" onclick="goHome()">
+    <div class="cmd-gem"></div>
+    <div class="cmd-name">SENECA</div>
   </div>
-  <div class="hero-badges">
-    <span class="badge">Graham · Buffett · Lynch</span>
-    <span class="badge">Health Score</span>
-    <span class="badge">AI Analysis</span>
-    <span class="badge">ETF / Index Models</span>
-    <span class="badge">Login · Any Device</span>
+  <div class="cmd-acts">
+    <div class="cmd-clock" id="cmd-clock"></div>
+    <button class="cmd-btn hidden" id="btn-login" onclick="openModal('login')">SIGN IN</button>
+    <button class="cmd-btn hidden" id="btn-acct" onclick="openModal('acct')">◆ ACCT</button>
+    <button class="cmd-btn cmd-btn-pro" id="btn-sub" onclick="clickSubscribe()">✦ PRO</button>
   </div>
-  <div class="hero-note">First lookup free · <a onclick="openModal('login')">Sign in to your account</a></div>
 </div>
 
-<!-- APP -->
-<div id="shell" class="shell">
-  <div class="hdr">
-    <!-- Logo — click to go home -->
-    <div class="hdr-logo" onclick="goHome()" role="button" title="Return to home">
-      <div class="hdr-gem"><span>◆</span></div>
-      <div class="hdr-logo-text">
-        <div class="hdr-logo-name">SENECA</div>
-        <div class="hdr-logo-tag">Intrinsic Value Oracle</div>
-      </div>
-      <div class="logo-home-hint">↩ HOME</div>
+<div id="pane-oracle" class="pane">
+  <div class="input-stage">
+    <div class="input-eyebrow">— ENTER SYMBOL TO VALUE —</div>
+    <div class="input-field">
+      <input id="search" class="input-el" type="text" placeholder="AAPL · MSFT · TSLA" maxlength="12" autocomplete="off" spellcheck="false"/>
     </div>
-    <!-- Analog clock -->
-    <div class="hdr-center"><canvas id="analog-clock" width="44" height="44"></canvas></div>
-    <!-- Right actions -->
-    <div class="hdr-right">
-      <button class="btn-login hidden" id="btn-login" onclick="openModal('login')">Sign In</button>
-      <button class="btn-acct hidden" id="btn-acct" onclick="openModal('acct')">Account</button>
-      <button class="btn-sub" id="btn-sub" onclick="clickSubscribe()">✦ Subscribe</button>
-    </div>
+    <button id="btn-go" class="input-go" onclick="doAnalyze()"><span style="font-size:.62rem">◆</span> CONSULT THE ORACLE</button>
   </div>
 
-  <div id="wl-bar" class="wl-bar"><div class="wl-title">◈ WATCHLIST</div><div id="wl-items" class="wl-items"></div></div>
-
-  <div class="search-wrap">
-    <div class="search-box">
-      <div class="search-row">
-        <input id="search" class="search-input" type="text" placeholder="Apple · AAPL · SPY · S&P 500" maxlength="60" autocomplete="off" spellcheck="false"/>
-        <button id="btn-go" class="btn-analyze" onclick="doAnalyze()">◈ Analyze</button>
-      </div>
-      <div class="search-hint">Ticker symbol OR company name OR ETF name</div>
-    </div>
-    <div class="chips">
-      <span class="chip" onclick="setQ('AAPL')">AAPL</span>
-      <span class="chip" onclick="setQ('MSFT')">MSFT</span>
-      <span class="chip" onclick="setQ('TSLA')">TSLA</span>
-      <span class="chip" onclick="setQ('NVDA')">NVDA</span>
-      <span class="chip" onclick="setQ('SPY')">SPY</span>
-      <span class="chip" onclick="setQ('QQQ')">QQQ</span>
-      <span class="chip" onclick="setQ('VOO')">VOO</span>
-      <span class="chip" onclick="setQ('KO')">KO</span>
-      <span class="chip" onclick="setQ('AMZN')">AMZN</span>
-      <span class="chip" onclick="setQ('BRK-B')">BRK-B</span>
-    </div>
+  <div class="chip-strip">
+    <div class="chip" onclick="setQ('AAPL')"><span class="chip-tick">●</span>AAPL</div>
+    <div class="chip" onclick="setQ('NVDA')"><span class="chip-tick">●</span>NVDA</div>
+    <div class="chip" onclick="setQ('MSFT')"><span class="chip-tick">●</span>MSFT</div>
+    <div class="chip" onclick="setQ('TSLA')"><span class="chip-tick">●</span>TSLA</div>
+    <div class="chip" onclick="setQ('GOOGL')"><span class="chip-tick">●</span>GOOGL</div>
+    <div class="chip" onclick="setQ('AMZN')"><span class="chip-tick">●</span>AMZN</div>
+    <div class="chip" onclick="setQ('KO')"><span class="chip-tick">●</span>KO</div>
+    <div class="chip" onclick="setQ('BRK-B')"><span class="chip-tick">●</span>BRK-B</div>
   </div>
 
-  <div id="cmp-bar" class="cmp-bar">
-    <div class="cmp-row">
-      <input id="cmp1" class="cmp-input" type="text" placeholder="AAPL" maxlength="60" autocomplete="off"/>
-      <span style="color:var(--dim);flex-shrink:0">vs</span>
-      <input id="cmp2" class="cmp-input" type="text" placeholder="MSFT" maxlength="60" autocomplete="off"/>
-      <button class="btn-cmp" onclick="doCompare()">Go</button>
-    </div>
-    <div class="cmp-hint">Tickers or company names both work</div>
+  <div class="status-line" id="status">Awaiting symbol · first lookup free</div>
+
+  <div class="spinner" id="spinner">
+    <div class="spin-ring"></div>
+    <div class="spin-txt">CONSULTING THE ORACLE…</div>
   </div>
 
-  <div id="status" class="status-bar">Enter a ticker, company name, or ETF to begin</div>
-  <div class="tabs">
-    <button class="tab on" id="tab-a" onclick="switchTab('a')">◈ &nbsp;Analyze</button>
-    <button class="tab" id="tab-w" onclick="switchTab('w')">◇ &nbsp;Watchlist</button>
-    <button class="tab" id="tab-b" onclick="switchTab('b')">✦ &nbsp;About</button>
-  </div>
-
-  <main id="main-scroll">
-    <div id="pane-a">
-      <div id="spinner" class="spinner"><div class="ring"></div><div class="spin-txt">Consulting the oracle…</div></div>
-
-      <!-- EMPTY STATE -->
-      <div id="empty-state" class="empty-state">
-        <div class="empty-quote-carousel">
-          <div class="eq-slide active">
-            <div class="eq-card">
-              <div class="eq-text">Price is what you pay. Value is what you get.</div>
-              <div class="eq-author">— WARREN BUFFETT</div>
-            </div>
-          </div>
-          <div class="eq-slide">
-            <div class="eq-card">
-              <div class="eq-text">The stock market is a device for transferring money from the impatient to the patient.</div>
-              <div class="eq-author">— WARREN BUFFETT</div>
-            </div>
-          </div>
-          <div class="eq-slide">
-            <div class="eq-card">
-              <div class="eq-text">In the short run, the market is a voting machine, but in the long run, it is a weighing machine.</div>
-              <div class="eq-author">— BENJAMIN GRAHAM</div>
-            </div>
-          </div>
-          <div class="eq-slide">
-            <div class="eq-card">
-              <div class="eq-text">The four most dangerous words in investing are: this time it's different.</div>
-              <div class="eq-author">— SIR JOHN TEMPLETON</div>
-            </div>
-          </div>
-          <div class="eq-slide">
-            <div class="eq-card">
-              <div class="eq-text">Know what you own, and know why you own it.</div>
-              <div class="eq-author">— PETER LYNCH</div>
-            </div>
-          </div>
-          <div class="eq-slide">
-            <div class="eq-card">
-              <div class="eq-text">The individual investor should act consistently as an investor and not as a speculator.</div>
-              <div class="eq-author">— BENJAMIN GRAHAM</div>
-            </div>
-          </div>
-        </div>
-        <div class="eq-dots" id="eq-dots"></div>
-        <div class="empty-grid">
-          <div class="empty-tile">
-            <div class="empty-tile-icon">◆</div>
-            <div class="empty-tile-title">6 MODELS</div>
-            <div class="empty-tile-body">Graham, Buffett, Lynch, Simons, DCF — synthesised into one composite</div>
-          </div>
-          <div class="empty-tile">
-            <div class="empty-tile-icon">⬡</div>
-            <div class="empty-tile-title">HEALTH SCORE</div>
-            <div class="empty-tile-body">Profitability, leverage, cash flow and accounting integrity graded A–F</div>
-          </div>
-          <div class="empty-tile">
-            <div class="empty-tile-icon">◈</div>
-            <div class="empty-tile-title">AI VERDICT</div>
-            <div class="empty-tile-body">Claude cross-verifies fundamentals and surfaces hidden financial risks</div>
-          </div>
-          <div class="empty-tile">
-            <div class="empty-tile-icon">⇄</div>
-            <div class="empty-tile-title">COMPARE</div>
-            <div class="empty-tile-body">Side-by-side valuation of any two stocks, ETFs or indexes</div>
-          </div>
-        </div>
-        <div class="empty-cta">
-          <div class="empty-cta-title">◈ &nbsp;QUICK START</div>
-          <div class="market-ticker">
-            <div class="mt-item" onclick="setQ('AAPL')"><div class="mt-sym">AAPL</div></div>
-            <div class="mt-item" onclick="setQ('NVDA')"><div class="mt-sym">NVDA</div></div>
-            <div class="mt-item" onclick="setQ('TSLA')"><div class="mt-sym">TSLA</div></div>
-            <div class="mt-item" onclick="setQ('SPY')"><div class="mt-sym">SPY</div></div>
-            <div class="mt-item" onclick="setQ('MSFT')"><div class="mt-sym">MSFT</div></div>
-          </div>
-          <div class="mt-tap">Tap any ticker above or type in the search bar</div>
-        </div>
-      </div>
-
-      <div id="results" class="hidden results-wrap"></div>
-      <div id="cmp-results" class="hidden results-wrap"></div>
-    </div>
-
-    <div id="pane-w" class="hidden">
-      <div class="wl-page">
-        <!-- Hero bar -->
-        <div class="wl-page-hero">
-          <div class="wl-page-hero-left">
-            <div class="wl-page-title">Watchlist</div>
-            <div class="wl-page-sub" id="wl-page-sub">Loading…</div>
-          </div>
-          <button class="wl-refresh-btn" id="wl-refresh-btn" onclick="refreshWLPrices()">↻ &nbsp;Refresh</button>
-        </div>
-
-        <!-- Default indexes (empty state) -->
-        <div id="wl-default" class="hidden">
-          <div class="wl-section-label">◈ &nbsp;MARKET BENCHMARKS</div>
-          <div class="wl-section-hint">Save a stock via ◈ Watchlist after any analysis. In the meantime, here are the key indexes.</div>
-          <div id="wl-default-cards" class="wl-cards"></div>
-        </div>
-
-        <!-- User watchlist -->
-        <div id="wl-user-list" class="hidden">
-          <div class="wl-section-label">◈ &nbsp;YOUR WATCHLIST</div>
-          <div id="wl-user-cards" class="wl-cards"></div>
-          <div class="wl-footer">
-            <button class="wl-clear-btn" onclick="clearWatchlist()">✕ &nbsp;Clear All</button>
-          </div>
-        </div>
-
-        <!-- Investor portraits — always visible below indexes/watchlist -->
-        <div id="wl-portraits-wrap"></div>
-      </div>
-    </div>
-
-    <div id="pane-b" class="hidden">
-      <div class="about-page">
-
-        <!-- Hero banner -->
-        <div class="about-hero">
-          <div class="about-hero-gem"><span>◆</span></div>
-          <div class="about-hero-title">SENECA</div>
-          <div class="about-hero-sub">Intrinsic Value Oracle</div>
-          <div class="about-hero-rule"></div>
-          <div class="about-hero-pitch">Professional-grade fundamental analysis. Seven time-tested valuation models, an AI-powered health score, and forensic financial review — all synthesised into one clear verdict on any stock, ETF, or index.</div>
-        </div>
-
-        <!-- Feature grid -->
-        <div class="about-section-label">◈ &nbsp;WHAT SENECA DELIVERS</div>
-        <div class="about-features">
-
-          <div class="af-card af-gold">
-            <div class="af-icon">◆</div>
-            <div class="af-title">7 VALUATION MODELS</div>
-            <div class="af-body">Graham Number, Graham Growth, Buffett DCF, Peter Lynch PEG, Simons Quant, Free Cash Flow DCF, and Gordon Growth DDM — each grounded in decades of investment theory.</div>
-            <div class="af-formula">Weighted composite = fair value consensus</div>
-          </div>
-
-          <div class="af-card af-turq">
-            <div class="af-icon">⬡</div>
-            <div class="af-title">HEALTH SCORE  A–F</div>
-            <div class="af-body">A deterministic 0–100 score grading five financial pillars: Profitability, Leverage, Cash Flow Quality, Growth, and Valuation Sanity — flagging hidden risks most investors miss.</div>
-            <div class="af-formula">Score = ROE + ROA + D/E + FCF + Coverage + Margins…</div>
-          </div>
-
-          <div class="af-card af-turq">
-            <div class="af-icon">◈</div>
-            <div class="af-title">AI FORENSIC ANALYSIS</div>
-            <div class="af-body">Powered by Llama 3.3 70B, SENECA's AI cross-verifies every health score for accounting irregularities, hidden liabilities, altered definitions, and off-balance-sheet risk — in plain English.</div>
-            <div class="af-formula">LLM × deterministic score = forensic verdict</div>
-          </div>
-
-          <div class="af-card af-gold">
-            <div class="af-icon">⇄</div>
-            <div class="af-title">SIDE-BY-SIDE COMPARE</div>
-            <div class="af-body">Compare any two stocks, ETFs or indexes simultaneously. Composite fair value, health score, P/E, dividend yield, beta and verdict displayed side-by-side for clear relative analysis.</div>
-            <div class="af-formula">Any two tickers · stocks, ETFs, indexes</div>
-          </div>
-
-          <div class="af-card af-muted">
-            <div class="af-icon">◫</div>
-            <div class="af-title">ETF &amp; INDEX MODELS</div>
-            <div class="af-body">ETFs and index funds get purpose-built models: Fed Model (earnings yield vs Treasury), P/E Mean Reversion to historical 17×, and CAPM-based Gordon Growth DDM. Not just stock formulas applied blindly.</div>
-            <div class="af-formula">Fed Model · P/E Reversion · ETF Gordon DDM</div>
-          </div>
-
-          <div class="af-card af-muted">
-            <div class="af-icon">↓</div>
-            <div class="af-title">PDF REPORT EXPORT</div>
-            <div class="af-body">Download a professionally formatted report for any analysis — all seven models, health score, AI verdict, and composite — ready to share with clients, advisors, or your investment committee.</div>
-            <div class="af-formula">Full report · branded · any device</div>
-          </div>
-
-        </div>
-
-        <!-- Methodology section -->
-        <div class="about-section-label">◈ &nbsp;THE MODELS</div>
-
-        <div class="about-model-card">
-          <div class="amc-left gold"></div>
-          <div class="amc-body">
-            <div class="amc-name">Graham Number</div>
-            <div class="amc-eq">√( 22.5 × EPS × Book Value Per Share )</div>
-            <div class="amc-desc">Benjamin Graham's bedrock formula. Takes the geometric mean of earnings and book value — the foundation of value investing since 1949. Only valid for profitable, asset-backed companies.</div>
-          </div>
-        </div>
-
-        <div class="about-model-card">
-          <div class="amc-left gold"></div>
-          <div class="amc-body">
-            <div class="amc-name">Graham Growth Formula</div>
-            <div class="amc-eq">EPS × (8.5 + 2g) × 4.4 ÷ AAA bond yield</div>
-            <div class="amc-desc">Graham's extension for growth stocks. Adjusts fair value based on expected earnings growth and the prevailing AAA bond yield — tying equity value to the cost of capital.</div>
-          </div>
-        </div>
-
-        <div class="about-model-card">
-          <div class="amc-left turq"></div>
-          <div class="amc-body">
-            <div class="amc-name">Buffett DCF</div>
-            <div class="amc-eq">Σ EPS × (1+g)ⁿ ÷ (1.09)ⁿ + terminal value at 15×</div>
-            <div class="amc-desc">Discounts ten years of projected EPS at a 9% rate with a 15× terminal earnings multiple — Warren Buffett's owner-earnings approach adapted for individual stocks.</div>
-          </div>
-        </div>
-
-        <div class="about-model-card">
-          <div class="amc-left turq"></div>
-          <div class="amc-body">
-            <div class="amc-name">Peter Lynch PEG</div>
-            <div class="amc-eq">EPS × earnings growth % (PEG = 1 is fairly valued)</div>
-            <div class="amc-desc">Lynch's famous insight: a fairly priced stock has a P/E equal to its growth rate. Simple, powerful, and famously effective for identifying growth stocks at reasonable prices.</div>
-          </div>
-        </div>
-
-        <div class="about-model-card">
-          <div class="amc-left muted"></div>
-          <div class="amc-body">
-            <div class="amc-name">Simons Quant Factor</div>
-            <div class="amc-eq">Price × (ROE ÷ P/E) × (1 ÷ P/B) × (1 + 0.3 × momentum)</div>
-            <div class="amc-desc">A Renaissance-inspired multi-factor signal blending quality (ROE), value (P/E, P/B), and price momentum. Penalises overpriced, low-quality stocks and rewards the opposite.</div>
-          </div>
-        </div>
-
-        <div class="about-model-card">
-          <div class="amc-left muted"></div>
-          <div class="amc-body">
-            <div class="amc-name">Free Cash Flow DCF</div>
-            <div class="amc-eq">Σ FCF/share × (1+g)ⁿ ÷ (1.10)ⁿ + terminal value</div>
-            <div class="amc-desc">Discounts actual free cash flow per share — the real cash the business generates — at a 10% discount rate with a 2.5% perpetual terminal growth assumption.</div>
-          </div>
-        </div>
-
-        <div class="about-model-card">
-          <div class="amc-left gold"></div>
-          <div class="amc-body">
-            <div class="amc-name">Gordon Growth DDM</div>
-            <div class="amc-eq">D₁ ÷ (CAPM required return − sustainable dividend growth)</div>
-            <div class="amc-desc">The Gordon Growth Model using CAPM for the required return (4.3% risk-free + beta × 5.5% equity premium) and dividend growth capped at 3.5%. Only applied to dividend-paying companies.</div>
-          </div>
-        </div>
-
-        <!-- Pricing -->
-        <div class="about-section-label">◈ &nbsp;FULL ACCESS</div>
-        <div class="about-pricing">
-          <div class="ap-left">
-            <div class="ap-price">$3.99<span class="ap-per">/mo</span></div>
-            <div class="ap-cancel">Cancel anytime · No contracts</div>
-          </div>
-          <div class="ap-divider"></div>
-          <div class="ap-features">
-            <div class="ap-feat">✦ &nbsp;Unlimited stock, ETF &amp; index lookups</div>
-            <div class="ap-feat">✦ &nbsp;7 valuation models + composite score</div>
-            <div class="ap-feat">✦ &nbsp;AI health score with forensic analysis</div>
-            <div class="ap-feat">✦ &nbsp;Persistent watchlist across all devices</div>
-            <div class="ap-feat">✦ &nbsp;PDF report export for every analysis</div>
-            <div class="ap-feat">✦ &nbsp;Side-by-side stock comparison</div>
-          </div>
-        </div>
-        <button class="about-subscribe-btn" onclick="clickSubscribe()">✦ &nbsp;Subscribe Now — $3.99/mo</button>
-
-        <div class="about-disc">SENECA is for educational and research purposes only. Not investment advice. Always conduct your own due diligence before making any investment decision.</div>
-      </div>
-    </div>
-  </main>
+  <div id="results" class="hidden"></div>
 </div>
 
-<!-- PAYWALL MODAL -->
-<div id="modal-pay" class="overlay">
-  <div class="modal"><div class="mband"></div><div class="mbody">
-    <div class="mgem"><span>◆</span></div>
-    <div class="mtitle">UNLOCK SENECA</div>
-    <div class="msub">Free lookup used. Subscribe for unlimited access.</div>
-    <div class="mprice"><div class="mprice-num">$3.99</div><div class="mprice-per">per month · cancel anytime</div></div>
-    <ul class="mfeatures">
-      <li>Unlimited lookups on any device</li>
-      <li>Health Score — financial integrity grading</li>
-      <li>AI forensic analysis of every stock</li>
-      <li>Persistent watchlist across devices</li>
-    </ul>
-    <button class="btn-big" id="pay-btn" onclick="launchStripe()">✦ &nbsp;Subscribe Now — $3.99/mo</button>
+<div id="pane-watch" class="pane hidden">
+  <div class="rail-head">
+    <div class="rail-title">◈ LIVE WATCHLIST</div>
+    <div class="rail-act" id="wl-refresh" onclick="refreshWL()">↻ SYNC</div>
+  </div>
+  <div class="wl-empty-note" id="wl-note"></div>
+  <div class="rail" id="wl-rail" style="flex-wrap:wrap;padding-bottom:8px"></div>
+</div>
+
+<div id="pane-minds" class="pane hidden">
+  <div class="rail-head"><div class="rail-title">◈ MINDS BEHIND THE MODELS</div></div>
+  <div id="minds-list" style="padding:0 14px 8px"></div>
+</div>
+
+<div id="pane-about" class="pane hidden">
+  <div class="about-pane">
+    <div class="about-gem-wrap"><div class="about-gem"></div></div>
+    <div class="about-title">SENECA</div>
+    <div class="about-tag">INTRINSIC VALUE ORACLE</div>
+    <div class="about-body">Named for the Stoic philosopher and the Seneca Nation — keepers of wisdom. This oracle applies seven time-tested valuation frameworks to reveal what a company is truly worth beneath the market's noise.</div>
+
+    <div class="formula-card"><div class="formula-name">Graham Number</div><div class="formula-eq">√( 22.5 × EPS × Book Value )</div><div class="formula-desc">Ben Graham's bedrock — the geometric mean of earnings and asset value.</div></div>
+    <div class="formula-card"><div class="formula-name">Graham Growth</div><div class="formula-eq">EPS × (8.5 + 2g) × 4.4 / AAA yield</div><div class="formula-desc">Extends Graham for growth relative to bond yields.</div></div>
+    <div class="formula-card"><div class="formula-name">Buffett DCF</div><div class="formula-eq">10yr EPS @ 9% · 15× terminal</div><div class="formula-desc">Discounts a decade of projected earnings to present value.</div></div>
+    <div class="formula-card"><div class="formula-name">Peter Lynch PEG</div><div class="formula-eq">EPS × growth% (PEG = 1)</div><div class="formula-desc">A fair P/E equals the earnings growth rate.</div></div>
+    <div class="formula-card"><div class="formula-name">Simons Quant</div><div class="formula-eq">ROE/PE × (1/PB) × momentum</div><div class="formula-desc">Renaissance-style multi-factor quality + momentum signal.</div></div>
+    <div class="formula-card"><div class="formula-name">Free Cash Flow DCF</div><div class="formula-eq">10yr FCF @ 10% · 2.5% terminal</div><div class="formula-desc">Pure cash generation discounted to today.</div></div>
+    <div class="formula-card"><div class="formula-name">Gordon Growth DDM</div><div class="formula-eq">D1 ÷ (CAPM rate − div growth)</div><div class="formula-desc">For dividend-payers — values the future dividend stream.</div></div>
+
+    <div class="about-pricing">
+      <div class="about-price">$3.99<small>/mo</small></div>
+      <div class="about-price-note">UNLIMITED LOOKUPS · CANCEL ANYTIME</div>
+      <button class="about-sub-btn" onclick="clickSubscribe()">✦ UNLOCK SENECA PRO</button>
+    </div>
+    <div class="disc"><p>✦ Seneca is for educational and research purposes only. Nothing here constitutes financial advice. Always conduct your own due diligence.</p></div>
+  </div>
+</div>
+
+<div class="dock">
+  <div class="dock-item on" id="dock-oracle" onclick="switchPane('oracle')"><i class="dock-ic">◆</i><div class="dock-lb">ORACLE</div></div>
+  <div class="dock-item" id="dock-watch" onclick="switchPane('watch')"><i class="dock-ic">◈</i><div class="dock-lb">WATCH</div></div>
+  <div class="dock-item" id="dock-minds" onclick="switchPane('minds')"><i class="dock-ic">✦</i><div class="dock-lb">MINDS</div></div>
+  <div class="dock-item" id="dock-about" onclick="switchPane('about')"><i class="dock-ic">◇</i><div class="dock-lb">ABOUT</div></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal" id="modal-pay">
+  <div class="modal-card">
+    <div class="modal-title">✦ Unlock Seneca Pro</div>
+    <div class="modal-sub">YOUR FREE LOOKUP IS USED</div>
+    <div class="paywall-feats">
+      <div class="pf-row"><span class="pf-check">✓</span> Unlimited valuations</div>
+      <div class="pf-row"><span class="pf-check">✓</span> AI analysis & financial forensics</div>
+      <div class="pf-row"><span class="pf-check">✓</span> Live watchlist with real-time prices</div>
+      <div class="pf-row"><span class="pf-check">✓</span> All seven valuation models</div>
+    </div>
+    <div class="modal-price"><div class="modal-price-num">$3.99</div><div class="modal-price-per">PER MONTH · CANCEL ANYTIME</div></div>
+    <button class="btn-big" id="pay-btn" onclick="launchStripe()">✦ SUBSCRIBE NOW</button>
     <button class="btn-ghost-modal" onclick="closeModal('modal-pay')">Maybe later</button>
-  </div></div>
+  </div>
 </div>
 
-<!-- SIGNUP MODAL -->
-<div id="modal-signup" class="overlay">
-  <div class="modal"><div class="mband"></div><div class="mbody">
-    <div class="mgem"><span>◆</span></div>
-    <div class="mtitle">CREATE ACCOUNT</div>
-    <div class="msub">Create account then subscribe. Watchlist saved across all devices.</div>
-    <div class="aerror" id="signup-err"></div>
-    <div class="afield"><label class="albl">EMAIL</label><input class="ainput" id="signup-email" type="email" placeholder="you@example.com" autocomplete="email"/></div>
-    <div class="afield"><label class="albl">PASSWORD</label><input class="ainput" id="signup-pw" type="password" placeholder="••••••••"/></div>
-    <button class="btn-big" id="signup-btn" onclick="doSignup()">✦ &nbsp;Create Account</button>
+<div class="modal" id="modal-signup">
+  <div class="modal-card">
+    <div class="modal-title">Create Account</div>
+    <div class="modal-sub">SECURE YOUR ORACLE ACCESS</div>
+    <div class="modal-err" id="signup-err"></div>
+    <input class="modal-input" id="signup-email" type="email" placeholder="Email" autocomplete="email"/>
+    <input class="modal-input" id="signup-pw" type="password" placeholder="Password" autocomplete="new-password"/>
+    <button class="btn-big" onclick="doSignup()">CREATE ACCOUNT & SUBSCRIBE</button>
     <button class="btn-ghost-modal" onclick="closeModal('modal-signup')">Cancel</button>
-    <div class="aswitch">Have an account? <a onclick="switchModal('modal-signup','modal-login')">Sign in</a></div>
-  </div></div>
+    <div class="modal-switch">Already have an account? <a onclick="switchModal('modal-signup','modal-login')">Sign in</a></div>
+  </div>
 </div>
 
-<!-- LOGIN MODAL -->
-<div id="modal-login" class="overlay">
-  <div class="modal"><div class="mband"></div><div class="mbody">
-    <div class="mgem"><span>◆</span></div>
-    <div class="mtitle">SIGN IN</div>
-    <div class="msub">Welcome back to SENECA.</div>
-    <div class="aerror" id="login-err"></div>
-    <div class="afield"><label class="albl">EMAIL</label><input class="ainput" id="login-email" type="email" placeholder="you@example.com" autocomplete="email"/></div>
-    <div class="afield"><label class="albl">PASSWORD</label><input class="ainput" id="login-pw" type="password" placeholder="••••••••"/></div>
-    <button class="btn-big" id="login-btn" onclick="doLogin()">✦ &nbsp;Sign In</button>
+<div class="modal" id="modal-login">
+  <div class="modal-card">
+    <div class="modal-title">Welcome Back</div>
+    <div class="modal-sub">SIGN IN TO YOUR ORACLE</div>
+    <div class="modal-err" id="login-err"></div>
+    <input class="modal-input" id="login-email" type="email" placeholder="Email" autocomplete="email"/>
+    <input class="modal-input" id="login-pw" type="password" placeholder="Password" autocomplete="current-password"/>
+    <button class="btn-big" onclick="doLogin()">SIGN IN</button>
     <button class="btn-ghost-modal" onclick="closeModal('modal-login')">Cancel</button>
-    <div class="aswitch">No account? <a onclick="switchModal('modal-login','modal-signup')">Sign up</a></div>
-  </div></div>
+    <div class="modal-switch">No account yet? <a onclick="switchModal('modal-login','modal-signup')">Create one</a></div>
+  </div>
 </div>
 
-<!-- ACCOUNT MODAL -->
-<div id="modal-acct" class="overlay">
-  <div class="modal"><div class="mband"></div><div class="mbody">
-    <div class="mtitle">◆ ACCOUNT</div>
-    <div class="acct-email" id="acct-email"></div>
-    <div id="acct-status" style="text-align:center;margin-bottom:16px;font-size:.8rem;color:var(--sub);font-style:italic"></div>
-    <button class="btn-big" id="acct-sub-btn" onclick="closeModal('modal-acct');launchStripe()" style="display:none">✦ &nbsp;Subscribe Now — $3.99/mo</button>
-    <button class="btn-big" style="background:var(--card2);color:var(--sub);border:1px solid var(--b2);margin-bottom:7px" onclick="doLogout()">Sign Out</button>
+<div class="modal" id="modal-acct">
+  <div class="modal-card">
+    <div class="modal-title">Account</div>
+    <div class="modal-acct-email" id="acct-email"></div>
+    <div class="modal-acct-status" id="acct-status"></div>
+    <button class="btn-big" id="acct-sub-btn" onclick="closeModal('modal-acct');launchStripe()" style="display:none">✦ SUBSCRIBE NOW — $3.99/mo</button>
+    <button class="btn-ghost-modal" onclick="doLogout()">Sign Out</button>
     <button class="btn-ghost-modal" onclick="closeModal('modal-acct')">Close</button>
-  </div></div>
+  </div>
 </div>
-
-<div id="toast" class="toast"></div>
 
 <script>
 let userEmail = {json.dumps(email)};
 let userSub   = {'true' if sub else 'false'};
 let watchlist = [];
 let lastTicker = '';
-let cmpOpen = false;
-let quoteSlide = 0;
-const QUOTES_COUNT = 6;
 
-// ── Init ──────────────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {{
-  // ── Analog clock ──────────────────────────────────────────────────────────
-  (function drawClock() {{
-    const canvas = document.getElementById('analog-clock');
-    if (!canvas) {{ setTimeout(drawClock, 200); return; }}
-    const ctx = canvas.getContext('2d');
-    const W = canvas.width, H = canvas.height, cx = W/2, cy = H/2, r = W/2 - 2;
+const DEFAULT_INDEXES = [
+  {{ticker:'SPY', name:'S&P 500'}},
+  {{ticker:'QQQ', name:'Nasdaq 100'}},
+  {{ticker:'DIA', name:'Dow Jones'}},
+  {{ticker:'IWM', name:'Russell 2000'}},
+  {{ticker:'GLD', name:'Gold'}},
+  {{ticker:'TLT', name:'Treasuries'}},
+];
 
-    function draw() {{
-      ctx.clearRect(0, 0, W, H);
-      const now = new Date();
-      const sec = now.getSeconds(), min = now.getMinutes(), hr = now.getHours() % 12;
+const INVESTORS = [
+  {{initials:'BG',name:'Benjamin Graham',years:'1894–1976',tag:'FATHER OF VALUE',bio:'Wrote the bible of investing. Invented intrinsic value and margin of safety. Mentored Warren Buffett.',quote:'The investor\u2019s chief problem is likely to be himself.'}},
+  {{initials:'WB',name:'Warren Buffett',years:'1930–',tag:'ORACLE OF OMAHA',bio:'Built Berkshire from a failing mill into a $900B empire averaging ~20% annual returns for 60 years.',quote:'Price is what you pay. Value is what you get.'}},
+  {{initials:'PL',name:'Peter Lynch',years:'1944–',tag:'PEG PIONEER',bio:'Ran Fidelity Magellan to 29% annual returns. Believed ordinary people had an edge over Wall Street.',quote:'Know what you own, and know why you own it.'}},
+  {{initials:'JT',name:'John Templeton',years:'1912–2008',tag:'GLOBAL PIONEER',bio:'Bought 100 shares of every NYSE stock under $1 in 1939 and made a fortune. Built the first global fund.',quote:'The time of maximum pessimism is the best time to buy.'}},
+  {{initials:'JS',name:'Jim Simons',years:'1938–2024',tag:'THE QUANT KING',bio:'Renaissance\u2019s Medallion Fund averaged 66% annually for decades using pure mathematics and signals.',quote:'We don\u2019t override the models. The models know.'}},
+  {{initials:'CM',name:'Charlie Munger',years:'1924–2023',tag:'MENTAL MODELS',bio:'Buffett\u2019s partner for 45 years. Shifted Berkshire toward quality businesses at fair prices.',quote:'Invert, always invert.'}},
+];
 
-      // Face
-      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
-      ctx.fillStyle = 'rgba(20,13,5,.92)'; ctx.fill();
-      ctx.strokeStyle = 'rgba(110,69,20,.6)'; ctx.lineWidth = 1; ctx.stroke();
+const priceCache = {{}};
 
-      // Gold rim highlight
-      ctx.beginPath(); ctx.arc(cx, cy, r-1, -Math.PI/2, Math.PI/2);
-      ctx.strokeStyle = 'rgba(200,138,26,.3)'; ctx.lineWidth = .8; ctx.stroke();
+// ── clock ──
+(function tick(){{
+  const el=document.getElementById('cmd-clock');
+  if(el) el.textContent=new Date().toLocaleTimeString([],{{hour:'2-digit',minute:'2-digit'}});
+  setTimeout(tick,1000);
+}})();
 
-      // Hour markers
-      for (let i=0; i<12; i++) {{
-        const a = (i/12)*Math.PI*2 - Math.PI/2;
-        const big = i % 3 === 0;
-        const inner = big ? r-7 : r-5;
-        ctx.beginPath();
-        ctx.moveTo(cx + Math.cos(a)*inner, cy + Math.sin(a)*inner);
-        ctx.lineTo(cx + Math.cos(a)*(r-2), cy + Math.sin(a)*(r-2));
-        ctx.strokeStyle = big ? 'rgba(200,138,26,.8)' : 'rgba(110,69,20,.5)';
-        ctx.lineWidth = big ? 1.2 : .7; ctx.stroke();
-      }}
-
-      // Roman-style center dot
-      ctx.beginPath(); ctx.arc(cx, cy, 2, 0, Math.PI*2);
-      ctx.fillStyle = 'rgba(232,170,52,.9)'; ctx.fill();
-
-      // Hour hand
-      const ha = ((hr + min/60)/12)*Math.PI*2 - Math.PI/2;
-      ctx.beginPath();
-      ctx.moveTo(cx - Math.cos(ha)*4, cy - Math.sin(ha)*4);
-      ctx.lineTo(cx + Math.cos(ha)*(r*.52), cy + Math.sin(ha)*(r*.52));
-      ctx.strokeStyle = 'rgba(232,170,52,.95)'; ctx.lineWidth = 2.2;
-      ctx.lineCap = 'round'; ctx.stroke();
-
-      // Minute hand
-      const ma = ((min + sec/60)/60)*Math.PI*2 - Math.PI/2;
-      ctx.beginPath();
-      ctx.moveTo(cx - Math.cos(ma)*5, cy - Math.sin(ma)*5);
-      ctx.lineTo(cx + Math.cos(ma)*(r*.72), cy + Math.sin(ma)*(r*.72));
-      ctx.strokeStyle = 'rgba(200,138,26,.85)'; ctx.lineWidth = 1.5;
-      ctx.lineCap = 'round'; ctx.stroke();
-
-      // Second hand — teal accent
-      const sa = (sec/60)*Math.PI*2 - Math.PI/2;
-      ctx.beginPath();
-      ctx.moveTo(cx - Math.cos(sa)*7, cy - Math.sin(sa)*7);
-      ctx.lineTo(cx + Math.cos(sa)*(r*.82), cy + Math.sin(sa)*(r*.82));
-      ctx.strokeStyle = 'rgba(72,196,174,.9)'; ctx.lineWidth = .9;
-      ctx.lineCap = 'round'; ctx.stroke();
-
-      // Center cap
-      ctx.beginPath(); ctx.arc(cx, cy, 2.5, 0, Math.PI*2);
-      ctx.fillStyle = 'rgba(245,204,96,1)'; ctx.fill();
-    }}
-
-    draw();
-    // Tick every second aligned to wall clock
-    const msUntilNextSec = 1000 - (Date.now() % 1000);
-    setTimeout(function loop() {{ draw(); setTimeout(loop, 1000); }}, msUntilNextSec);
-  }})();
-  if (userEmail) {{
-    userSub = {'true' if sub else 'false'};
-    // Load server watchlist
-    fetch('/api/watchlist').then(r=>r.json()).then(d=>{{
-      if(d.ok){{ watchlist=d.watchlist||[]; renderWL(); }}
-    }}).catch(()=>{{}});
-    syncHeader();
+// ── init ──
+window.addEventListener('DOMContentLoaded',()=>{{
+  if(userEmail){{
+    fetch('/api/watchlist').then(r=>r.json()).then(d=>{{ if(d.ok){{watchlist=d.watchlist||[];renderWLBar();}} }}).catch(()=>{{}});
   }} else {{
-    watchlist = JSON.parse(sessionStorage.getItem('wl') || '[]');
-    renderWL();
-    syncHeader();
+    try{{ watchlist=JSON.parse(sessionStorage.getItem('wl')||'[]'); }}catch(e){{ watchlist=[]; }}
   }}
-  initQuotes();
+  syncHeader();
+  renderMinds();
   {toast_js}
 }});
 
-// ── Quote carousel ────────────────────────────────────────────────────────────
-function initQuotes() {{
-  const dots = document.getElementById('eq-dots');
-  if (!dots) return;
-  for(let i=0;i<QUOTES_COUNT;i++) {{
-    const d = document.createElement('div');
-    d.className = 'eq-dot' + (i===0?' active':'');
-    d.onclick = () => goQuote(i);
-    dots.appendChild(d);
-  }}
-  setInterval(() => goQuote((quoteSlide+1)%QUOTES_COUNT), 5000);
-}}
-function goQuote(n) {{
-  const slides = document.querySelectorAll('.eq-slide');
-  const dots = document.querySelectorAll('.eq-dot');
-  if (!slides.length) return;
-  slides[quoteSlide].classList.remove('active');
-  dots[quoteSlide].classList.remove('active');
-  quoteSlide = n;
-  slides[quoteSlide].classList.add('active');
-  dots[quoteSlide].classList.add('active');
-}}
-
-// ── Header / state ────────────────────────────────────────────────────────────
-function syncHeader() {{
-  const loginBtn = document.getElementById('btn-login');
-  const acctBtn  = document.getElementById('btn-acct');
-  const subBtn   = document.getElementById('btn-sub');
-  if (userEmail) {{
-    loginBtn.classList.add('hidden');
-    acctBtn.classList.remove('hidden');
-    subBtn.style.display = userSub ? 'none' : '';
-  }} else {{
-    loginBtn.classList.remove('hidden');
-    acctBtn.classList.add('hidden');
-    subBtn.style.display = '';
-  }}
-}}
-function enterApp() {{
-  document.getElementById('hero').style.display = 'none';
-  document.getElementById('shell').classList.add('on');
-}}
-function goHome() {{
-  // Return to hero page — reset app state cleanly
-  document.getElementById('shell').classList.remove('on');
-  document.getElementById('hero').style.display = '';
-  // Scroll hero back to top
-  window.scrollTo({{top:0,behavior:'smooth'}});
-  // Reset analyze state
-  document.getElementById('search').value = '';
-  document.getElementById('results').classList.add('hidden');
-  document.getElementById('cmp-results').classList.add('hidden');
-  document.getElementById('empty-state').classList.remove('hidden');
-  document.getElementById('spinner').classList.remove('on');
-  setStatus('Enter a ticker, company name, or ETF to begin');
-}}
-function switchTab(t) {{
-  ['a','w','b'].forEach(x=>{{
-    document.getElementById('pane-'+x).classList.toggle('hidden',x!==t);
-    document.getElementById('tab-'+x).classList.toggle('on',x===t);
+// ── pane switching ──
+function switchPane(p){{
+  ['oracle','watch','minds','about'].forEach(x=>{{
+    document.getElementById('pane-'+x).classList.toggle('hidden',x!==p);
+    document.getElementById('dock-'+x).classList.toggle('on',x===p);
   }});
-  if(t==='w') renderWLPage();
+  if(p==='watch') renderWLPage();
+  window.scrollTo({{top:0,behavior:'smooth'}});
 }}
-function setQ(v) {{ document.getElementById('search').value=v; doAnalyze(); }}
+function goHome(){{ switchPane('oracle'); }}
+
+// ── header sync ──
+function syncHeader(){{
+  const login=document.getElementById('btn-login');
+  const acct=document.getElementById('btn-acct');
+  const sub=document.getElementById('btn-sub');
+  if(userEmail){{
+    login.classList.add('hidden'); acct.classList.remove('hidden');
+    sub.style.display=userSub?'none':'';
+  }} else {{
+    login.classList.remove('hidden'); acct.classList.add('hidden');
+    sub.style.display='';
+  }}
+}}
+
+// ── input ──
+function setQ(v){{ document.getElementById('search').value=v; doAnalyze(); }}
 document.getElementById('search').addEventListener('keydown',e=>{{ if(e.key==='Enter'){{e.preventDefault();doAnalyze();}} }});
+document.getElementById('search').addEventListener('input',e=>{{ e.target.value=e.target.value.toUpperCase(); }});
 
-// ── Modals ────────────────────────────────────────────────────────────────────
-function openModal(name) {{
-  if(name==='acct') {{
-    document.getElementById('acct-email').textContent='◆ '+userEmail;
-    if(userSub) {{
-      document.getElementById('acct-status').textContent='✦ Active subscription';
-      document.getElementById('acct-status').style.color='var(--green)';
-      document.getElementById('acct-sub-btn').style.display='none';
-    }} else {{
-      document.getElementById('acct-status').textContent='No active subscription';
-      document.getElementById('acct-status').style.color='var(--dim)';
-      document.getElementById('acct-sub-btn').style.display='block';
-    }}
-  }}
-  document.getElementById('modal-'+name).classList.add('on');
-}}
-function closeModal(id) {{ document.getElementById(id).classList.remove('on'); }}
-function switchModal(from,to) {{ closeModal(from); openModal(to.replace('modal-','')); }}
-['modal-pay','modal-signup','modal-login','modal-acct'].forEach(id=>{{
-  document.getElementById(id).addEventListener('click',e=>{{ if(e.target===e.currentTarget) closeModal(id); }});
-}});
-
-// ── Subscribe ─────────────────────────────────────────────────────────────────
-function clickSubscribe() {{
-  enterApp();
-  if(userSub) {{ toast('✦ You already have full access!'); return; }}
-  if(userEmail) {{ launchStripe(); }}
-  else {{ openModal('signup'); }}
-}}
-async function launchStripe() {{
-  const btn=document.getElementById('pay-btn');
-  if(btn) {{ btn.disabled=true; btn.textContent='Redirecting…'; }}
-  try {{
-    const r=await fetch('/api/checkout',{{method:'POST'}});
-    const d=await r.json();
-    if(d.url) {{ window.location.href=d.url; }}
-    else {{ userSub=true; syncHeader(); closeModal('modal-pay'); toast('✦ Demo mode: full access!'); }}
-  }} catch(e) {{ userSub=true; syncHeader(); closeModal('modal-pay'); toast('✦ Demo mode!'); }}
-  finally {{ if(btn) {{ btn.disabled=false; btn.textContent='✦  Subscribe Now — $3.99/mo'; }} }}
-}}
-
-// ── Auth ──────────────────────────────────────────────────────────────────────
-async function doSignup() {{
-  const email=document.getElementById('signup-email').value.trim();
-  const pw=document.getElementById('signup-pw').value;
-  const btn=document.getElementById('signup-btn');
-  const err=document.getElementById('signup-err');
-  err.textContent='';
-  if(!email||!pw) {{ err.textContent='Please fill in both fields.'; return; }}
-  btn.disabled=true; btn.textContent='Creating account…';
-  try {{
-    const r=await fetch('/api/signup',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{email,pw}})}});
-    const d=await r.json();
-    if(!d.ok) {{ err.textContent=d.error||'Error'; return; }}
-    userEmail=d.email; userSub=d.sub;
-    watchlist=d.watchlist||[];
-    renderWL(); syncHeader(); closeModal('modal-signup'); enterApp();
-    toast('◆ Account created! Launching checkout…');
-    setTimeout(launchStripe,600);
-  }} catch(e) {{ err.textContent='Network error. Try again.'; }}
-  finally {{ btn.disabled=false; btn.textContent='✦  Create Account'; }}
-}}
-async function doLogin() {{
-  const email=document.getElementById('login-email').value.trim();
-  const pw=document.getElementById('login-pw').value;
-  const btn=document.getElementById('login-btn');
-  const err=document.getElementById('login-err');
-  err.textContent='';
-  if(!email||!pw) {{ err.textContent='Please fill in both fields.'; return; }}
-  btn.disabled=true; btn.textContent='Signing in…';
-  try {{
-    const r=await fetch('/api/login',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{email,pw}})}});
-    const d=await r.json();
-    if(!d.ok) {{ err.textContent=d.error||'Error'; return; }}
-    userEmail=d.email; userSub=d.sub;
-    watchlist=d.watchlist||[];
-    renderWL(); syncHeader(); closeModal('modal-login'); enterApp();
-    toast(userSub?'✦ Welcome back! Subscription active.':'◆ Signed in.');
-  }} catch(e) {{ err.textContent='Network error. Try again.'; }}
-  finally {{ btn.disabled=false; btn.textContent='✦  Sign In'; }}
-}}
-async function doLogout() {{
-  await fetch('/api/logout',{{method:'POST'}});
-  userEmail=''; userSub=false; watchlist=[];
-  syncHeader(); renderWL(); closeModal('modal-acct'); toast('Signed out.');
-}}
-
-// ── Watchlist (server-persisted for logged in users) ──────────────────────────
-const DEFAULT_INDEXES = [
-  {{ticker:'SPY', name:'S&P 500',          color:'gold'}},
-  {{ticker:'QQQ', name:'Nasdaq 100',       color:'gold'}},
-  {{ticker:'DIA', name:'Dow Jones',        color:'turq'}},
-  {{ticker:'IWM', name:'Russell 2000',     color:'turq'}},
-  {{ticker:'GLD', name:'Gold',             color:'gold'}},
-  {{ticker:'TLT', name:'20yr Treasuries',  color:'muted'}},
-];
-
-// ── Investor Portraits ────────────────────────────────────────────────────────
-const INVESTORS = [
-  {{
-    initials: "BG",
-    name: "Benjamin Graham",
-    years: "1894 – 1976",
-    title: "Father of Value Investing",
-    accent: "gold",
-    bio: "Wrote the bible of investing — Security Analysis (1934) and The Intelligent Investor (1949). Invented the concept of intrinsic value and margin of safety. His most famous student: Warren Buffett.",
-    quote: "The investor's chief problem — and even his worst enemy — is likely to be himself.",
-    stat1: "Margin of Safety", stat2: "Intrinsic Value", stat3: "Mr. Market"
-  }},
-  {{
-    initials: "WB",
-    name: "Warren Buffett",
-    years: "1930 – present",
-    title: "Oracle of Omaha",
-    accent: "turq",
-    bio: "Built Berkshire Hathaway from a failing textile mill into a $900B empire over 60 years. Averaged 20% annual returns. Known for holding forever, thinking like an owner, and drinking Cherry Coke.",
-    quote: "Price is what you pay. Value is what you get.",
-    stat1: "~20% Annual Return", stat2: "60+ Year Horizon", stat3: "Owner Mentality"
-  }},
-  {{
-    initials: "PL",
-    name: "Peter Lynch",
-    years: "1944 – present",
-    title: "The People's Investor",
-    accent: "gold",
-    bio: "Ran Fidelity Magellan 1977–90, turning $18M into $14B — the best-performing mutual fund in history. Believed ordinary people had an edge over Wall Street by investing in what they already know.",
-    quote: "Invest in what you know. Your edge is in the mall, not on Wall Street.",
-    stat1: "29% Annual Return", stat2: "13-Year Run", stat3: "PEG Ratio"
-  }},
-  {{
-    initials: "JT",
-    name: "John Templeton",
-    years: "1912 – 2008",
-    title: "Pioneer of Global Investing",
-    accent: "muted",
-    bio: "In 1939 he borrowed $10,000 and bought 100 shares of every stock on the NYSE trading under $1 — and made a fortune. Built the first global mutual fund. Later knighted for philanthropy.",
-    quote: "The time of maximum pessimism is the best time to buy.",
-    stat1: "Contrarian Genius", stat2: "Global Pioneer", stat3: "Knighted 1987"
-  }},
-  {{
-    initials: "GS",
-    name: "George Soros",
-    years: "1930 – present",
-    title: "The Man Who Broke the Bank",
-    accent: "turq",
-    bio: "Made $1 billion in a single day shorting the British pound in 1992. Developed reflexivity theory — the idea that market prices actively shape the fundamentals they're supposed to reflect.",
-    quote: "Markets are constantly in a state of uncertainty. Money is made by discounting the obvious.",
-    stat1: "$1B in One Day", stat2: "Reflexivity Theory", stat3: "Quantum Fund"
-  }},
-  {{
-    initials: "CM",
-    name: "Charlie Munger",
-    years: "1924 – 2023",
-    title: "The Architect of Berkshire",
-    accent: "gold",
-    bio: "Buffett's partner and intellectual equal for 45 years. Convinced Buffett to buy quality businesses at fair prices rather than cheap businesses at great prices — a shift that defined Berkshire's greatness.",
-    quote: "Invert, always invert. Many problems are best solved by asking what you want to avoid.",
-    stat1: "Mental Models", stat2: "Latticework Thinking", stat3: "Quality > Cheap"
-  }},
-];
-
-// ── Watchlist runtime functions ──────────────────────────────────────────────
-const priceCache = {{}};
-
-function saveWL() {{
-  if(userEmail) {{
-    fetch('/api/watchlist',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{watchlist}})}}).catch(()=>{{}});
-  }} else {{
-    sessionStorage.setItem('wl',JSON.stringify(watchlist));
-  }}
-}}
-
-function renderWL() {{
-  const bar  = document.getElementById('wl-bar');
-  const items = document.getElementById('wl-items');
-  if (!watchlist.length) {{ bar.classList.remove('on'); }} else {{
-    bar.classList.add('on');
-    items.innerHTML = watchlist.map(t =>
-      `<span class="wl-chip" onclick="setQ('${{t}}')">${{t}}<button class="wl-rm" onclick="event.stopPropagation();removeWL('${{t}}')">✕</button></span>`
-    ).join('');
-  }}
-  if (!document.getElementById('pane-w').classList.contains('hidden')) renderWLPage();
-}}
-
-function buildCard(ticker, name, color, removable) {{
-  const cached = priceCache[ticker];
-  let priceHtml;
-  if (cached) {{
-    const arrow = cached.chg >= 0 ? '▲' : '▼';
-    const cls   = cached.chg >= 0 ? 'up' : 'dn';
-    priceHtml = `<div class="wl-card-price">$${{cached.price.toLocaleString('en-US',{{minimumFractionDigits:2,maximumFractionDigits:2}})}}</div>
-      <div class="wl-card-chg ${{cls}}">${{arrow}} ${{Math.abs(cached.chg).toFixed(2)}}%</div>`;
-  }} else {{
-    priceHtml = `<div class="wl-card-price-loading">
-      <span class="wl-shimmer" style="width:58px;height:16px;border-radius:4px">&nbsp;</span>
-    </div><div style="margin-top:5px"><span class="wl-shimmer" style="width:40px;height:9px;border-radius:3px">&nbsp;</span></div>`;
-  }}
-  const rmBtn = removable
-    ? `<button class="wl-btn-remove" onclick="event.stopPropagation();removeWL('${{ticker}}')">✕ Remove</button>`
-    : '';
-  return `<div class="wl-card" id="wlcard-${{ticker}}">
-    <div class="wl-card-accent ${{color}}"></div>
-    <div class="wl-card-body">
-      <div class="wl-card-left">
-        <div class="wl-card-ticker">${{ticker}}</div>
-        <div class="wl-card-name">${{name}}</div>
-      </div>
-      <div class="wl-card-center" id="wlprice-${{ticker}}">${{priceHtml}}</div>
-      <div class="wl-card-right">
-        <button class="wl-btn-analyze" onclick="setQ('${{ticker}}');switchTab('a')">◈ Analyze</button>
-        ${{rmBtn}}
-      </div>
-    </div>
-  </div>`;
-}}
-
-function buildPortraitsSection() {{
-  const accentColors = {{
-    gold:  {{ bg: 'rgba(200,138,26,.12)',  border: 'rgba(200,138,26,.35)',  text: '#e8aa34', mono: '#c8901a' }},
-    turq:  {{ bg: 'rgba(30,122,106,.12)',  border: 'rgba(30,122,106,.35)',  text: '#48c4ae', mono: '#1e7a6a' }},
-    muted: {{ bg: 'rgba(106,78,44,.12)',   border: 'rgba(106,78,44,.35)',   text: '#b88a4c', mono: '#7a5828' }},
-  }};
-  return `<div class="wl-portraits-section">
-    <div class="wl-section-label" style="padding:28px 0 4px">◈ &nbsp;MASTERS OF THE MARKET</div>
-    <div class="wl-portraits-sub">The investors whose ideas power this oracle.</div>
-    ${{INVESTORS.map(inv => {{
-      const ac = accentColors[inv.accent];
-      return `<div class="ipc" style="--ipc-bg:${{ac.bg}};--ipc-border:${{ac.border}};--ipc-text:${{ac.text}};--ipc-mono:${{ac.mono}}">
-        <div class="ipc-head">
-          <div class="ipc-medallion">
-            <div class="ipc-ring"></div>
-            <div class="ipc-initials">${{inv.initials}}</div>
-          </div>
-          <div class="ipc-ident">
-            <div class="ipc-name">${{inv.name}}</div>
-            <div class="ipc-title">${{inv.title}}</div>
-            <div class="ipc-years">${{inv.years}}</div>
-          </div>
-        </div>
-        <div class="ipc-stats">
-          <span class="ipc-stat">${{inv.stat1}}</span>
-          <span class="ipc-stat">${{inv.stat2}}</span>
-          <span class="ipc-stat">${{inv.stat3}}</span>
-        </div>
-        <div class="ipc-bio">${{inv.bio}}</div>
-        <div class="ipc-quote">❝ ${{inv.quote}}</div>
-      </div>`;
-    }}).join('')}}
-  </div>`;
-}}
-
-
-function renderWLPage() {{
-  const count = watchlist.length;
-  const sub = document.getElementById('wl-page-sub');
-  sub.textContent = count ? count+' ticker'+(count===1?'':'s')+' · tap to analyze' : 'Market benchmarks · live prices';
-  const defDiv  = document.getElementById('wl-default');
-  const userDiv = document.getElementById('wl-user-list');
-  const tickers = count ? [...watchlist] : DEFAULT_INDEXES.map(x=>x.ticker);
-  const colors  = ['gold','gold','turq','gold','muted','turq','muted','gold'];
-
-  if (count === 0) {{
-    defDiv.classList.remove('hidden');
-    userDiv.classList.add('hidden');
-    document.getElementById('wl-default-cards').innerHTML =
-      DEFAULT_INDEXES.map((idx,i) => buildCard(idx.ticker, idx.name, colors[i%colors.length], false)).join('');
-  }} else {{
-    defDiv.classList.add('hidden');
-    userDiv.classList.remove('hidden');
-    document.getElementById('wl-user-cards').innerHTML =
-      watchlist.map((t,i) => buildCard(t, '', colors[i%colors.length], true)).join('');
-  }}
-  // Portraits always shown below — only build once
-  const pw = document.getElementById('wl-portraits-wrap');
-  if (pw && !pw.dataset.built) {{ pw.innerHTML = buildPortraitsSection(); pw.dataset.built = '1'; }}
-  fetchWLPrices(tickers);
-}}
-
-async function fetchWLPrices(tickers) {{
-  const btn = document.getElementById('wl-refresh-btn');
-  if(btn) btn.disabled = true;
-  // Single batch request — much faster than individual /api/quote calls
-  try {{
-    const r = await fetch('/api/price?tickers='+tickers.join(','));
-    if(r.ok) {{
-      const data = await r.json();
-      Object.entries(data).forEach(([t, d]) => {{
-        priceCache[t] = d;
-        const el = document.getElementById('wlprice-'+t);
-        if(el) {{
-          const arrow = d.chg >= 0 ? '▲' : '▼';
-          const cls   = d.chg >= 0 ? 'up' : 'dn';
-          el.innerHTML = `<div class="wl-card-price">$${{d.price.toLocaleString('en-US',{{minimumFractionDigits:2,maximumFractionDigits:2}})}}</div>
-            <div class="wl-card-chg ${{cls}}">${{arrow}} ${{Math.abs(d.chg).toFixed(2)}}%</div>`;
-        }}
-      }});
-    }}
-  }} catch(e) {{}}
-  if(btn) {{ btn.disabled=false; btn.textContent='↻  Refresh'; }}
-}}
-
-async function refreshWLPrices() {{
-  const tickers = watchlist.length ? [...watchlist] : DEFAULT_INDEXES.map(x=>x.ticker);
-  tickers.forEach(t => delete priceCache[t]);
-  renderWLPage();
-}}
-
-function addWL(ticker) {{
-  if(!ticker||watchlist.includes(ticker)) return;
-  watchlist.push(ticker); saveWL(); renderWL(); toast('◆ '+ticker+' saved to watchlist');
-}}
-function removeWL(ticker) {{
-  watchlist=watchlist.filter(t=>t!==ticker); saveWL(); renderWL();
-}}
-function clearWatchlist() {{
-  watchlist=[]; saveWL(); renderWL(); toast('Watchlist cleared');
-}}
-
-// ── Compare ───────────────────────────────────────────────────────────────────
-function toggleCmp() {{
-  cmpOpen=!cmpOpen;
-  document.getElementById('cmp-bar').classList.toggle('on',cmpOpen);
-  document.getElementById('btn-cmp').classList.toggle('active',cmpOpen);
-  if(cmpOpen) document.getElementById('cmp1').focus();
-}}
-async function doCompare() {{
-  const t1=document.getElementById('cmp1').value.trim();
-  const t2=document.getElementById('cmp2').value.trim();
-  if(!t1||!t2) {{ toast('Enter two tickers or names'); return; }}
-  switchTab('a');
-  document.getElementById('spinner').classList.add('on');
-  document.getElementById('results').classList.add('hidden');
-  document.getElementById('cmp-results').classList.add('hidden');
-  document.getElementById('empty-state').classList.add('hidden');
-  setStatus('Comparing '+t1+' vs '+t2+'…','var(--t3)');
-  try {{
-    const [r1,r2]=await Promise.all([fetch('/api/quote?q='+encodeURIComponent(t1)),fetch('/api/quote?q='+encodeURIComponent(t2))]);
-    if(r1.status===402||r2.status===402) {{ openModal('pay'); return; }}
-    if(!r1.ok||!r2.ok) throw new Error('Could not fetch one or both tickers');
-    const [d1,d2]=await Promise.all([r1.json(),r2.json()]);
-    renderCmp(d1,d2);
-    setStatus('Comparison: '+d1.ticker+' vs '+d2.ticker,'var(--green)');
-  }} catch(e) {{ setStatus('⚠ '+e.message,'var(--red)'); }}
-  finally {{ document.getElementById('spinner').classList.remove('on'); }}
-}}
-function renderCmp(d1,d2) {{
-  function fp(v) {{ return(!v||v<=0)?'N/A':'$'+v.toLocaleString('en-US',{{minimumFractionDigits:2,maximumFractionDigits:2}}); }}
-  const win1=(d1.composite&&d2.composite)?d1.composite>d2.composite:false;
-  function col(d,win) {{
-    const h=d.health||{{}};
-    return `<div class="cmp-col ${{win?'win':''}}">
-      <div class="cmp-hdr"><div class="cmp-tkr">${{d.ticker}}${{win?' ✦':''}}</div><div class="cmp-nm">${{d.name}}</div><div class="cmp-px">${{fp(d.price)}}</div></div>
-      <div class="cmp-r"><span class="cl">Composite FV</span><span class="cv">${{fp(d.composite)}}</span></div>
-      <div class="cmp-r"><span class="cl">Health Score</span><span class="cv">${{h.score||'—'}}/100 (Grade ${{h.grade||'?'}})</span></div>
-      <div class="cmp-r"><span class="cl">P/E</span><span class="cv">${{d.pe?d.pe.toFixed(1)+'×':'—'}}</span></div>
-      <div class="cmp-r"><span class="cl">Div Yield</span><span class="cv">${{d.div_y?d.div_y.toFixed(2)+'%':'—'}}</span></div>
-      <div class="cmp-r"><span class="cl">Beta</span><span class="cv">${{d.beta?d.beta.toFixed(2):'—'}}</span></div>
-      <div class="cmp-vd ${{d.verdict_cls==='down'?'dn':d.verdict_cls}}">${{d.verdict_text}}</div>
-    </div>`;
-  }}
-  document.getElementById('cmp-results').innerHTML=`<div class="sec">◈ &nbsp;COMPARISON</div><div class="cmp-grid">${{col(d1,win1)}}${{col(d2,!win1)}}</div>`;
-  document.getElementById('cmp-results').classList.remove('hidden');
-  document.getElementById('results').classList.add('hidden');
-}}
-
-// ── PDF ───────────────────────────────────────────────────────────────────────
-async function exportPDF() {{
-  if(!lastTicker) {{ toast('Analyze a stock first'); return; }}
-  toast('◆ Generating report…');
-  try {{
-    const r=await fetch('/api/pdf?q='+encodeURIComponent(lastTicker));
-    if(r.status===402) {{ openModal('pay'); return; }}
-    if(!r.ok) throw new Error('Report error');
-    const blob=await r.blob();
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url; a.download='SENECA-'+lastTicker+'-report.pdf';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url); toast('◆ Report downloaded!');
-  }} catch(e) {{ toast('⚠ '+e.message); }}
-}}
-
-// ── AI verdict ────────────────────────────────────────────────────────────────
-async function loadAI(ticker) {{
-  const el=document.getElementById('ai-text');
-  if(!el) return;
-  try {{
-    const r=await fetch('/api/ai?q='+encodeURIComponent(ticker));
-    if(r.ok) {{
-      const d=await r.json();
-      el.innerHTML=d.verdict
-        ?'<span class="ai-text">'+d.verdict+'</span>'
-        :'<span style="color:var(--dim);font-size:.7rem;font-style:italic">Add GROQ_API_KEY in Railway to enable AI analysis</span>';
-    }}
-  }} catch(e) {{ el.innerHTML='<span style="color:var(--dim);font-size:.7rem;font-style:italic">AI unavailable</span>'; }}
-}}
-
-// ── Health AI ─────────────────────────────────────────────────────────────────
-async function loadHealthAI(ticker) {{
-  const el=document.getElementById('health-ai-text');
-  if(!el) return;
-  try {{
-    const r=await fetch('/api/health-ai?q='+encodeURIComponent(ticker));
-    if(r.ok) {{
-      const d=await r.json();
-      el.innerHTML=d.analysis
-        ?'<span class="health-ai-text">'+d.analysis+'</span>'
-        :'<span style="color:var(--dim);font-size:.7rem;font-style:italic">Add GROQ_API_KEY in Railway to enable AI forensics</span>';
-    }}
-  }} catch(e) {{ el.innerHTML='<span style="color:var(--dim);font-size:.7rem;font-style:italic">AI forensics unavailable</span>'; }}
-}}
-
-// ── Main analyze ──────────────────────────────────────────────────────────────
-async function doAnalyze() {{
-  const q=document.getElementById('search').value.trim();
-  if(!q) return;
-  switchTab('a'); enterApp();
+// ── ANALYZE ──
+async function doAnalyze(){{
+  const t=document.getElementById('search').value.trim().toUpperCase();
+  if(!t) return;
+  switchPane('oracle');
+  lastTicker=t;
   document.getElementById('btn-go').disabled=true;
   document.getElementById('results').classList.add('hidden');
-  document.getElementById('cmp-results').classList.add('hidden');
-  document.getElementById('empty-state').classList.add('hidden');
   document.getElementById('spinner').classList.add('on');
-  setStatus('Consulting the oracle…','var(--t3)');
-  try {{
-    const r=await fetch('/api/quote?q='+encodeURIComponent(q));
-    if(r.status===402) {{ setStatus('Free lookup used — subscribe for unlimited access','var(--g2)'); openModal('pay'); return; }}
-    if(!r.ok) {{ const e=await r.json(); throw new Error(e.error||'Server error'); }}
+  setStatus('Consulting the oracle for '+t+'…','var(--gold)');
+  try{{
+    const r=await fetch('/api/quote?q='+encodeURIComponent(t));
+    if(r.status===402){{ document.getElementById('spinner').classList.remove('on'); document.getElementById('btn-go').disabled=false; setStatus('Free lookup used','var(--w3)'); openModal('pay'); return; }}
+    if(!r.ok){{ const e=await r.json(); throw new Error(e.error||'Server error'); }}
     const d=await r.json();
-    lastTicker=d.ticker; renderResult(d);
-    setStatus('Analysis complete · '+d.ticker+' · '+new Date().toLocaleTimeString(),'var(--green)');
+    render(d);
+    setStatus('Analysis complete · '+d.ticker+' · '+new Date().toLocaleTimeString(),'var(--jade)');
     loadAI(d.ticker);
     loadHealthAI(d.ticker);
-  }} catch(e) {{
-    setStatus('⚠ '+e.message,'var(--red)');
-    // Map technical errors to friendly messages
-    let friendly = e.message;
-    if(friendly.includes('No market data') || friendly.includes('No price')) friendly = friendly;
-    else if(friendly.includes('404') || friendly.includes('not found')) friendly = 'This symbol could not be found. Try typing the full company name or check the ticker.';
-    else if(friendly.includes('network') || friendly.includes('fetch')) friendly = 'Connection issue. Please check your internet and try again.';
-    else if(friendly.includes('timeout')) friendly = 'The request timed out. Markets may be closed or data is slow — please try again.';
-    document.getElementById('results').innerHTML=`<div class="err"><div class="err-title">◈ Unable to load data</div><div class="err-body">${{friendly}}<br/><br/><span style="font-size:.7rem;color:var(--dim)">Tip: Try using the exact ticker symbol (e.g. AAPL instead of Apple Inc)</span></div></div>`;
+  }}catch(e){{
+    setStatus('⚠ '+e.message,'var(--blood2)');
+    document.getElementById('results').innerHTML='<div class="ai-block" style="border-color:var(--blood)"><div class="ai-body" style="color:var(--blood2);font-style:normal">⚠ '+e.message+'</div></div>';
     document.getElementById('results').classList.remove('hidden');
-  }} finally {{
+  }}finally{{
     document.getElementById('spinner').classList.remove('on');
     document.getElementById('btn-go').disabled=false;
   }}
 }}
 
-// ── Render result ─────────────────────────────────────────────────────────────
-function renderResult(d) {{
+function render(d){{
   const p=d.price;
+  const cls=d.verdict_cls==='up'?'up':d.verdict_cls==='down'?'down':'fair';
+  let comp=d.composite;
+  let marginPct=(comp&&comp>0&&p)?((comp-p)/p*100):null;
   const pct=(d.hi52>d.lo52&&d.lo52>0)?Math.min(Math.max((p-d.lo52)/(d.hi52-d.lo52),0),1)*100:null;
-  const isEtf=d.asset_type==='etf';
-  const compVal=d.composite&&d.composite>0?fp(d.composite):'N/A';
-  const vc=d.verdict_cls==='down'?'dn':d.verdict_cls;
-  const vcol=d.verdict_cls==='up'?'var(--green)':d.verdict_cls==='down'?'var(--red)':'var(--g2)';
-  const margin=(d.composite&&d.composite>0&&p>0)?((d.composite-p)/p*100):null;
-  const marginTxt=margin!==null?(margin>=0?'+':'')+margin.toFixed(1)+'% vs price':'';
-  const h=d.health||{{}};
+
+  // verdict highlight word
+  let vmain=d.verdict_text||'Insufficient data';
+  let vword='', vrest=vmain;
+  const vm=vmain.replace('✦','').trim();
   let html='';
 
-  // ── HERO CARD: price + composite at top ──
-  html+=`<div class="hero-card">
-    <div class="hero-card-band ${{vc}}"></div>
-    <div class="hero-card-inner">
-      <div class="hero-left">
-        ${{isEtf?'<div class="etf-tag">◈ ETF / INDEX</div>':''}}
-        <div class="hero-name">${{d.name}}</div>
-        <div class="hero-ticker">${{d.ticker}}</div>
-        <div class="hero-sector">${{d.sector}} · ${{fc(d.cap)}}</div>
-      </div>
-      <div class="hero-right">
-        <div class="hero-price-block">
-          <div class="hero-price-label">MARKET PRICE</div>
-          <div class="hero-price">${{fp(p)}}</div>
-          <div class="hero-chg ${{d.chg>=0?'up':'dn'}}">${{d.chg>=0?'▲':'▼'}} ${{Math.abs(d.chg).toFixed(2)}}%</div>
-        </div>
-        <div class="hero-divider-v"></div>
-        <div class="hero-comp-block">
-          <div class="hero-price-label">SENECA COMPOSITE</div>
-          <div class="hero-comp-val">${{compVal}}</div>
-          <div class="hero-margin ${{vc}}">${{marginTxt}}</div>
-        </div>
-      </div>
-    </div>
-    <div class="hero-verdict ${{vc}}">${{d.verdict_text}}</div>
-    <div class="hero-range">
-      <div class="rng-labels">
-        <span class="rlo">${{d.lo52>0?'$'+d.lo52.toFixed(2):'—'}}</span>
-        <span class="rmid">52 · W E E K · R A N G E</span>
-        <span class="rhi">${{d.hi52>0?'$'+d.hi52.toFixed(2):'—'}}</span>
-      </div>
-      <div class="rng-track">
-        <div class="rng-fill" style="width:${{pct!==null?pct:0}}%"></div>
-        <div class="rng-thumb" style="left:${{pct!==null?pct:0}}%"></div>
-      </div>
-      <div class="rng-pct">${{pct!==null?pct.toFixed(0)+'th percentile':'unavailable'}}</div>
-    </div>
+  // ── HERO: VERDICT STAGE ──
+  html+=`<div class="divider"><div class="divider-line"></div><div class="divider-txt">ORACLE VERDICT</div><div class="divider-line r"></div></div>`;
+  html+=`<div class="verdict-stage">
+    <div class="vs-glow ${{cls}}"></div>
+    <div class="vs-strip ${{cls}}"></div>
+    <div class="vs-co">${{d.name}} · ${{d.ticker}}</div>
+    <div class="vs-sector">${{(d.sector||'—').toUpperCase()}} · ${{(d.asset_type||'stock').toUpperCase()}}</div>
+    <div class="vs-comp-label">◆ SENECA COMPOSITE FAIR VALUE</div>
+    <div class="vs-comp">${{comp&&comp>0?fp(comp):'N/A'}}</div>
+    <div class="vs-comp-sub">WEIGHTED SYNTHESIS OF SEVEN MODELS</div>`;
+  if(marginPct!==null){{
+    const ms=marginPct>=0?'▲ '+marginPct.toFixed(1)+'% MARGIN OF SAFETY':'▼ '+Math.abs(marginPct).toFixed(1)+'% ABOVE FAIR VALUE';
+    html+=`<div class="vs-margin ${{cls}}">${{ms}}</div>`;
+  }} else {{ html+=`<div class="vs-margin fair">—</div>`; }}
+
+  html+=`<div class="vs-verdict ${{cls}}">
+    <div class="vs-verdict-main"><span class="hl-${{cls}}">${{vm}}</span></div>
+    <div class="vs-verdict-sub">${{d.verdict_detail||'Six-model consensus vs. current price.'}}</div>
   </div>`;
 
-  // ── HEALTH SCORE ──
-  const grade=h.grade||'?';
-  const score=h.score||0;
-  const breakdown=h.breakdown||{{}};
-  const flags=h.flags||[];
-  const bdKeys=Object.keys(breakdown).slice(0,8);
-  html+=`<div class="health-card">
-    <div class="health-header">
-      <div class="health-title">⬡ &nbsp;HEALTH SCORE</div>
-      <div class="health-grade-wrap">
-        <div class="health-score">${{score}}<span style="font-size:.9rem;color:var(--dim)">/100</span></div>
-        <div class="health-grade ${{grade}}">${{grade}}</div>
-      </div>
-    </div>
-    <div class="health-bar-wrap">
-      <div class="health-bar-track"><div class="health-bar-fill ${{grade}}" style="width:${{score}}%"></div></div>
-    </div>
-    ${{bdKeys.length?`<div class="health-breakdown">${{bdKeys.map(k=>`<div class="hb-item"><span class="hb-key">${{k}}</span><span class="hb-val">${{breakdown[k]}}</span></div>`).join('')}}</div>`:''}}`+
-    `${{flags.length?`<div class="health-flags">${{flags.map(f=>`<span class="health-flag">⚠ ${{f}}</span>`).join('')}}</div>`:''}}
-    <div class="health-ai-wrap">
-      <div class="health-ai-label">◆ &nbsp;AI FORENSIC ANALYSIS</div>
-      <div id="health-ai-text"><div class="health-ai-loading dots">
-        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-        <span style="color:var(--dim);font-size:.68rem;font-style:italic;margin-left:6px">Cross-verifying financials…</span>
-      </div></div>
-    </div>
+  // current stats
+  html+=`<div class="vs-stats">
+    <div class="vs-stat"><div class="vs-stat-lbl">MARKET PRICE</div><div class="vs-stat-val">${{fp(p)}}</div></div>
+    <div class="vs-stat"><div class="vs-stat-lbl">TODAY</div><div class="vs-stat-val ${{d.chg>=0?'up':'down'}}">${{d.chg>=0?'▲':'▼'}} ${{Math.abs(d.chg).toFixed(2)}}%</div></div>
+    <div class="vs-stat"><div class="vs-stat-lbl">52W POS</div><div class="vs-stat-val">${{pct!==null?pct.toFixed(0)+'%':'—'}}</div></div>
   </div>`;
 
-  // ── FUNDAMENTALS ──
-  const funds=isEtf?[
-    ['P/E Ratio',d.pe?d.pe.toFixed(1)+'×':'—'],
-    ['Dividend Yield',d.div_y?d.div_y.toFixed(2)+'%':'—'],
-    ['Beta',d.beta?d.beta.toFixed(2):'—'],
-    ['52wk Momentum',d.mom.toFixed(1)+'%'],
-    ['Earnings Yield',d.earnings_yield?d.earnings_yield.toFixed(2)+'%':'—'],
-    ['Growth Est.',d.growth?d.growth.toFixed(1)+'%':'—'],
-  ]:[
-    ['EPS (TTM)',d.eps?'$'+d.eps.toFixed(2):'—'],
-    ['Book Val/Shr',d.bvps?'$'+d.bvps.toFixed(2):'—'],
-    ['P/E Ratio',d.pe?d.pe.toFixed(1)+'×':'—'],
-    ['P/B Ratio',d.pb?d.pb.toFixed(2)+'×':'—'],
-    ['ROE',d.roe?d.roe.toFixed(1)+'%':'—'],
-    ['Growth Est.',d.growth?d.growth.toFixed(1)+'%':'—'],
-    ['FCF/Share',d.fcf?'$'+d.fcf.toFixed(2):'—'],
-    ['52wk Mom.',d.mom.toFixed(1)+'%'],
-    ['Div Yield',d.div_y?d.div_y.toFixed(2)+'%':'—'],
-    ['Beta',d.beta?d.beta.toFixed(2):'—'],
-  ];
-  html+=`<div class="lux-section">
-    <div class="lux-section-title">◆ &nbsp;FUNDAMENTALS</div>
-    <div class="fgrid">${{funds.map(([l,v])=>`<div class="fc"><span class="fl">${{l}}</span><span class="fv">${{v}}</span></div>`).join('')}}</div>
+  // range
+  html+=`<div class="vs-range">
+    <div class="vs-range-ends">
+      <span class="vs-range-lo">${{d.lo52>0?'$'+d.lo52.toFixed(2):'—'}}</span>
+      <span class="vs-range-mid">52-WEEK RANGE</span>
+      <span class="vs-range-hi">${{d.hi52>0?'$'+d.hi52.toFixed(2):'—'}}</span>
+    </div>
+    <div class="vs-track"><div class="vs-fill" style="width:${{pct!==null?pct:0}}%"></div><div class="vs-pin" style="left:${{pct!==null?pct:0}}%"></div></div>
+  </div>`;
+
+  // ── MODEL MATRIX ──
+  html+=`<div class="matrix-head"><span>VALUATION MODEL</span><span>FAIR VALUE · Δ</span></div>`;
+  html+=d.models.map(m=>{{
+    const v=m.value;
+    const sc=m.sig_cls==='up'?'up':m.sig_cls==='down'?'down':(m.sig_cls==='na'?'na':'fair');
+    let delta='—', barW=15;
+    if(v&&v>0&&p){{ const dm=(v-p)/p*100; delta=(dm>=0?'+':'')+dm.toFixed(0)+'%'; barW=Math.min(Math.max(50+dm,8),98); }}
+    return `<div class="mx-row">
+      <div class="mx-bar ${{sc}}" style="width:${{barW}}%"></div>
+      <div class="mx-name">${{m.name}}</div>
+      <div class="mx-val ${{sc}}">${{v&&v>0?fp(v):'N/A'}}</div>
+      <div class="mx-delta ${{sc}}">${{delta}}</div>
+    </div>`;
+  }}).join('');
+  html+=`</div>`; // close verdict-stage
+
+  // ── HEALTH CARD ──
+  if(d.health){{
+    const h=d.health;
+    const g=h.grade||'C';
+    html+=`<div class="health-block">
+      <div class="health-top">
+        <div class="health-title">◆ FINANCIAL HEALTH</div>
+        <div class="health-gr">
+          <div class="health-score">${{h.score}}<small>/100</small></div>
+          <div class="health-grade ${{g}}">${{g}}</div>
+        </div>
+      </div>
+      <div class="health-bar"><div class="health-bar-fill ${{g}}" style="width:${{h.score}}%"></div></div>`;
+    const bd=h.breakdown||{{}};
+    const keys=Object.keys(bd);
+    if(keys.length){{
+      html+=`<div class="health-grid">`+keys.slice(0,8).map(k=>`<div class="hg-item"><span class="hg-k">${{k}}</span><span class="hg-v">${{bd[k]}}</span></div>`).join('')+`</div>`;
+    }}
+    if(h.flags&&h.flags.length){{
+      html+=`<div class="health-flags">`+h.flags.map(f=>`<span class="health-flag">⚠ ${{f}}</span>`).join('')+`</div>`;
+    }}
+    // health AI placeholder
+    html+=`<div id="health-ai" style="border-top:0.5px solid var(--line)">
+      <div class="ai-head"><div class="ai-ic jade">⚕</div><div class="ai-title">SENECA FORENSIC ANALYSIS</div></div>
+      <div class="ai-loading" id="health-ai-load"><div class="dot"></div><div class="dot"></div><div class="dot"></div><span class="ai-loading-txt">Probing for hidden risks…</span></div>
+    </div>`;
+    html+=`</div>`;
+  }}
+
+  // ── AI VERDICT CARD ──
+  html+=`<div class="ai-block">
+    <div class="ai-head"><div class="ai-ic">◆</div><div class="ai-title">SENECA AI · VALUE THESIS</div></div>
+    <div id="ai-verdict"><div class="ai-loading"><div class="dot"></div><div class="dot"></div><div class="dot"></div><span class="ai-loading-txt">The oracle is contemplating…</span></div></div>
   </div>`;
 
   // ── ACTIONS ──
+  const inWL=watchlist.includes(d.ticker);
   html+=`<div class="actions">
-    <button class="btn-sm" id="btn-cmp" onclick="toggleCmp()">⇄ Compare</button>
-    <button class="btn-sm" onclick="addWL('${{d.ticker}}')">◈ Watchlist</button>
-    <button class="btn-sm" onclick="exportPDF()">↓ PDF</button>
-  </div>`;
-
-  // ── MODELS ──
-  html+=`<div class="lux-section-title">◆ &nbsp;${{isEtf?'INDEX VALUATION MODELS':'VALUATION MODELS'}}</div>`;
-  html+=d.models.map(m=>{{
-    const v=m.value&&m.value>0?fp(m.value):'N/A';
-    const sc=m.sig_cls==='down'?'dn':m.sig_cls;
-    return`<div class="mc"><div class="mbar ${{m.stripe}}"></div><div class="mbody">
-      <div class="mrow"><span class="mname ${{m.cls}}">◆ ${{m.name}}</span><span class="mval ${{sc}}">${{v}}</span></div>
-      <div class="msig ${{sc}}">${{m.sig_txt}}</div><div class="mfm">${{m.formula}}</div>
-    </div></div>`;
-  }}).join('');
-
-  // ── VERDICT DETAIL ──
-  html+=`<div class="verdict-detail-card ${{vc}}">
-    <div class="vd-icon">${{d.verdict_cls==='up'?'▲':d.verdict_cls==='down'?'▼':'◈'}}</div>
-    <div><div class="vd-title" style="color:${{vcol}}">${{d.verdict_text}}</div>
-    <div class="vd-body">${{d.verdict_detail}}</div></div>
-  </div>`;
-
-  // ── AI VERDICT ──
-  html+=`<div class="ai-card">
-    <div class="ai-label">◆ &nbsp;SENECA AI ANALYSIS</div>
-    <div id="ai-text"><div class="dots">
-      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-      <span style="color:var(--dim);font-size:.68rem;font-style:italic;margin-left:6px">Oracle is thinking…</span>
-    </div></div>
+    <button class="act-btn ${{inWL?'saved':''}}" id="wl-toggle" onclick="toggleWL('${{d.ticker}}')">${{inWL?'★ SAVED':'☆ ADD TO WATCHLIST'}}</button>
+    <button class="act-btn" onclick="downloadReport('${{d.ticker}}')">⬇ REPORT</button>
   </div>`;
 
   document.getElementById('results').innerHTML=html;
   document.getElementById('results').classList.remove('hidden');
-  document.getElementById('cmp-results').classList.add('hidden');
-  document.getElementById('main-scroll').scrollTo({{top:0,behavior:'smooth'}});
 }}
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function toast(msg) {{
-  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('on');
-  setTimeout(()=>t.classList.remove('on'),4000);
+// ── AI loaders ──
+async function loadAI(t){{
+  try{{
+    const r=await fetch('/api/ai?q='+encodeURIComponent(t));
+    const d=await r.json();
+    const el=document.getElementById('ai-verdict');
+    if(el) el.innerHTML=d.verdict?`<div class="ai-body">${{d.verdict}}</div>`:`<div class="ai-body" style="color:var(--w3)">AI analysis unavailable. The seven models above remain your guide.</div>`;
+  }}catch(e){{
+    const el=document.getElementById('ai-verdict');
+    if(el) el.innerHTML=`<div class="ai-body" style="color:var(--w3)">AI analysis unavailable.</div>`;
+  }}
 }}
-function setStatus(msg,col) {{ const e=document.getElementById('status'); e.textContent=msg; e.style.color=col||'var(--dim)'; }}
-function fp(v) {{ if(!v||v<=0) return 'N/A'; return '$'+v.toLocaleString('en-US',{{minimumFractionDigits:2,maximumFractionDigits:2}}); }}
-function fc(v) {{ if(!v||v<=0) return '—'; if(v>1e12) return '$'+(v/1e12).toFixed(2)+'T'; if(v>1e9) return '$'+(v/1e9).toFixed(1)+'B'; if(v>1e6) return '$'+(v/1e6).toFixed(0)+'M'; return '—'; }}
+async function loadHealthAI(t){{
+  try{{
+    const r=await fetch('/api/health-ai?q='+encodeURIComponent(t));
+    const d=await r.json();
+    const el=document.getElementById('health-ai-load');
+    if(el) el.outerHTML=d.analysis?`<div class="ai-body">${{d.analysis}}</div>`:`<div class="ai-body" style="color:var(--w3)">Forensic analysis unavailable.</div>`;
+  }}catch(e){{
+    const el=document.getElementById('health-ai-load');
+    if(el) el.outerHTML=`<div class="ai-body" style="color:var(--w3)">Forensic analysis unavailable.</div>`;
+  }}
+}}
+
+function downloadReport(t){{ window.open('/api/pdf?q='+encodeURIComponent(t),'_blank'); }}
+
+// ── WATCHLIST ──
+function saveWL(){{
+  if(userEmail) fetch('/api/watchlist',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{watchlist}})}}).catch(()=>{{}});
+  else sessionStorage.setItem('wl',JSON.stringify(watchlist));
+}}
+function renderWLBar(){{ if(!document.getElementById('pane-watch').classList.contains('hidden')) renderWLPage(); }}
+function toggleWL(t){{
+  if(watchlist.includes(t)){{ watchlist=watchlist.filter(x=>x!==t); toast('Removed '+t); }}
+  else {{ watchlist.push(t); toast('★ '+t+' added to watchlist'); }}
+  saveWL();
+  const btn=document.getElementById('wl-toggle');
+  if(btn){{ const on=watchlist.includes(t); btn.classList.toggle('saved',on); btn.textContent=on?'★ SAVED':'☆ ADD TO WATCHLIST'; }}
+}}
+function removeWL(t){{ watchlist=watchlist.filter(x=>x!==t); saveWL(); renderWLPage(); }}
+
+function buildWLCard(ticker,name,removable){{
+  const c=priceCache[ticker];
+  let inner;
+  if(c){{
+    const arrow=c.chg>=0?'▲':'▼', cl=c.chg>=0?'up':'dn';
+    inner=`<div class="rail-px">$${{c.price.toLocaleString('en-US',{{minimumFractionDigits:2,maximumFractionDigits:2}})}}</div><div class="rail-chg ${{cl}}">${{arrow}} ${{Math.abs(c.chg).toFixed(2)}}%</div>`;
+  }} else {{
+    inner=`<div class="rail-px"><span class="rail-shimmer" style="width:46px;height:14px">&nbsp;</span></div><div class="rail-chg" style="margin-top:4px"><span class="rail-shimmer" style="width:32px;height:8px">&nbsp;</span></div>`;
+  }}
+  const cardCls=c?(c.chg>=0?'up':'dn'):'';
+  const rm=removable?`<span class="rail-rm" onclick="event.stopPropagation();removeWL('${{ticker}}')">✕</span>`:'';
+  return `<div class="rail-card ${{cardCls}}" onclick="setQ('${{ticker}}')" style="min-width:96px">${{rm}}<div class="rail-sym">${{ticker}}</div>${{inner}}</div>`;
+}}
+
+function renderWLPage(){{
+  const rail=document.getElementById('wl-rail');
+  const note=document.getElementById('wl-note');
+  let tickers;
+  if(watchlist.length){{
+    note.textContent='Your saved symbols · tap any to analyze.';
+    tickers=[...watchlist];
+    rail.innerHTML=watchlist.map(t=>buildWLCard(t,'',true)).join('');
+  }} else {{
+    note.textContent='No saved symbols yet. Here are the market benchmarks — analyze a stock and tap ☆ to build your list.';
+    tickers=DEFAULT_INDEXES.map(x=>x.ticker);
+    rail.innerHTML=DEFAULT_INDEXES.map(x=>buildWLCard(x.ticker,x.name,false)).join('');
+  }}
+  fetchWLPrices(tickers);
+}}
+
+async function fetchWLPrices(tickers){{
+  const btn=document.getElementById('wl-refresh');
+  if(btn) btn.textContent='↻ SYNCING';
+  try{{
+    const r=await fetch('/api/price?tickers='+tickers.join(','));
+    if(r.ok){{
+      const data=await r.json();
+      Object.entries(data).forEach(([t,d])=>{{ priceCache[t]=d; }});
+      renderWLCardsInPlace();
+    }}
+  }}catch(e){{}}
+  if(btn) btn.textContent='↻ SYNC';
+}}
+function renderWLCardsInPlace(){{
+  const rail=document.getElementById('wl-rail');
+  if(!rail) return;
+  if(watchlist.length) rail.innerHTML=watchlist.map(t=>buildWLCard(t,'',true)).join('');
+  else rail.innerHTML=DEFAULT_INDEXES.map(x=>buildWLCard(x.ticker,x.name,false)).join('');
+}}
+function refreshWL(){{
+  const tickers=watchlist.length?[...watchlist]:DEFAULT_INDEXES.map(x=>x.ticker);
+  tickers.forEach(t=>delete priceCache[t]);
+  renderWLPage();
+}}
+
+// ── MINDS ──
+function renderMinds(){{
+  const el=document.getElementById('minds-list');
+  el.innerHTML=INVESTORS.map(inv=>`
+    <div class="master" style="width:auto;margin-bottom:9px">
+      <div class="master-top">
+        <div class="master-medal">${{inv.initials}}</div>
+        <div><div class="master-name">${{inv.name}}</div><div class="master-years">${{inv.years}}</div></div>
+      </div>
+      <div class="master-tag">${{inv.tag}}</div>
+      <div class="master-bio">${{inv.bio}}</div>
+      <div class="master-quote">❝ ${{inv.quote}}</div>
+    </div>`).join('');
+}}
+
+// ── MODALS ──
+function openModal(name){{
+  if(name==='acct'){{
+    document.getElementById('acct-email').textContent='◆ '+userEmail;
+    const st=document.getElementById('acct-status');
+    if(userSub){{ st.textContent='✦ PRO · UNLIMITED ACCESS'; st.className='modal-acct-status pro'; document.getElementById('acct-sub-btn').style.display='none'; }}
+    else {{ st.textContent='FREE TIER'; st.className='modal-acct-status free'; document.getElementById('acct-sub-btn').style.display=''; }}
+  }}
+  document.getElementById('modal-'+name).classList.add('on');
+}}
+function closeModal(id){{ document.getElementById(id).classList.remove('on'); }}
+function switchModal(from,to){{ closeModal(from); openModal(to.replace('modal-','')); }}
+['modal-pay','modal-signup','modal-login','modal-acct'].forEach(id=>{{
+  const m=document.getElementById(id);
+  if(m) m.addEventListener('click',e=>{{ if(e.target===e.currentTarget) closeModal(id); }});
+}});
+
+// ── SUBSCRIBE ──
+function clickSubscribe(){{
+  if(userSub){{ toast('✦ You already have full access!'); return; }}
+  if(userEmail){{ launchStripe(); }}
+  else {{ openModal('signup'); }}
+}}
+async function launchStripe(){{
+  const btn=document.getElementById('pay-btn');
+  if(btn) btn.textContent='Loading…';
+  try{{
+    const r=await fetch('/api/checkout',{{method:'POST'}});
+    const d=await r.json();
+    if(d.url){{ window.location.href=d.url; }}
+    else {{ userSub=true; syncHeader(); closeModal('modal-pay'); toast('✦ Demo mode: full access!'); }}
+  }}catch(e){{ userSub=true; syncHeader(); closeModal('modal-pay'); toast('✦ Demo mode!'); }}
+  if(btn) btn.textContent='✦ SUBSCRIBE NOW';
+}}
+
+// ── AUTH ──
+async function doSignup(){{
+  const email=document.getElementById('signup-email').value.trim();
+  const pw=document.getElementById('signup-pw').value;
+  const err=document.getElementById('signup-err');
+  if(!email||!pw){{ err.textContent='Email and password required'; return; }}
+  err.textContent='';
+  try{{
+    const r=await fetch('/api/signup',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{email,pw}})}});
+    const d=await r.json();
+    if(!d.ok){{ err.textContent=d.error||'Signup failed'; return; }}
+    userEmail=d.email; userSub=d.sub;
+    syncHeader(); closeModal('modal-signup'); toast('◆ Account created.');
+    setTimeout(launchStripe,500);
+  }}catch(e){{ err.textContent='Network error'; }}
+}}
+async function doLogin(){{
+  const email=document.getElementById('login-email').value.trim();
+  const pw=document.getElementById('login-pw').value;
+  const err=document.getElementById('login-err');
+  if(!email||!pw){{ err.textContent='Email and password required'; return; }}
+  err.textContent='';
+  try{{
+    const r=await fetch('/api/login',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{email,pw}})}});
+    const d=await r.json();
+    if(!d.ok){{ err.textContent=d.error||'Login failed'; return; }}
+    userEmail=d.email; userSub=d.sub;
+    fetch('/api/watchlist').then(rr=>rr.json()).then(dd=>{{ if(dd.ok){{watchlist=dd.watchlist||[];renderWLBar();}} }}).catch(()=>{{}});
+    syncHeader(); closeModal('modal-login');
+    toast(userSub?'✦ Welcome back! Pro active.':'◆ Signed in.');
+  }}catch(e){{ err.textContent='Network error'; }}
+}}
+async function doLogout(){{
+  await fetch('/api/logout',{{method:'POST'}});
+  userEmail=''; userSub=false; watchlist=[];
+  syncHeader(); closeModal('modal-acct'); toast('Signed out.');
+}}
+
+// ── helpers ──
+function toast(msg){{ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),3500); }}
+function setStatus(msg,col){{ const e=document.getElementById('status'); e.textContent=msg; e.style.color=col||'var(--w3)'; }}
+function fp(v){{ if(!v||v<=0) return 'N/A'; return '$'+v.toLocaleString('en-US',{{minimumFractionDigits:2,maximumFractionDigits:2}}); }}
+function fc(v){{ if(!v||v<=0) return '—'; if(v>1e12) return '$'+(v/1e12).toFixed(2)+'T'; if(v>1e9) return '$'+(v/1e9).toFixed(1)+'B'; if(v>1e6) return '$'+(v/1e6).toFixed(0)+'M'; return '—'; }}
 </script>
+
 </body></html>"""
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5678)
