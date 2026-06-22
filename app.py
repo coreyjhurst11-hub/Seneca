@@ -517,7 +517,37 @@ NYSE_UNIVERSE = [
     "NEE","SO","DUK","D","AEP","EXC",
     "F","GM","KR","DG","DLTR","ROST","TJX",
 ]
-NYSE_UNIVERSE = list(dict.fromkeys(NYSE_UNIVERSE))
+
+# Built from sector sublists so the scan always covers the categories you want.
+# (NYSE-listed only — NASDAQ names like AAPL/MSFT/NVDA/COST are intentionally excluded.)
+_LB_BANKS = [   # 20 banks
+    "JPM","BAC","WFC","C","GS","MS","USB","PNC","TFC","BK",
+    "STT","COF","CFG","KEY","RF","MTB","ALLY","DFS","CMA","FHN",
+]
+_LB_INSURANCE = [  # 20 insurers (incl. managed-care health insurers)
+    "UNH","ELV","CI","HUM","CNC","CB","TRV","AIG","MET","PRU",
+    "AFL","ALL","PGR","MMC","AON","AJG","HIG","MKL","WRB","L",
+]
+_LB_RETAIL = [  # 12 retailers
+    "WMT","HD","LOW","TGT","TJX","DG","KR","BBY","DKS","AZO","WSM","BURL",
+]
+_LB_TECH = [    # 20 tech / software / IT services
+    "ORCL","CRM","IBM","ACN","NOW","UBER","SHOP","SNOW","NET","TWLO",
+    "DELL","HPQ","HPE","MSI","GLW","FICO","TYL","EPAM","GPN","CIEN",
+]
+_LB_OTHER = [   # 48 — payments, energy, industrials, healthcare, staples, utilities, etc.
+    "V","MA","AXP","BLK","SPGI","SCHW",                              # payments / asset mgmt
+    "XOM","CVX","COP","SLB","OXY","EOG","PSX","KMI","WMB",           # energy
+    "CAT","DE","GE","MMM","BA","LMT","RTX","UPS",                    # industrials
+    "JNJ","LLY","ABBV","MRK","PFE","ABT","TMO",                      # healthcare / pharma
+    "PG","KO","MCD","CL","KMB","PM","MO",                            # consumer staples
+    "NEE","SO","DUK","D","AEP",                                      # utilities
+    "DIS","NKE","F","GM",                                            # media / discretionary / autos
+    "T","VZ",                                                        # telecom
+]
+
+NYSE_UNIVERSE = _LB_BANKS + _LB_INSURANCE + _LB_RETAIL + _LB_TECH + _LB_OTHER
+NYSE_UNIVERSE = list(dict.fromkeys(NYSE_UNIVERSE))   # ~120 unique tickers
 
 _LB_LOCK = threading.Lock()
 LEADERBOARD = {
@@ -1349,7 +1379,9 @@ a{{color:var(--gold);cursor:pointer;text-decoration:none}}
 .lb-prog-fill{{height:100%;background:linear-gradient(90deg,var(--gold),var(--jade2));transition:width .4s ease}}
 .lb-prog-txt{{font-family:var(--mono);font-size:.46rem;color:var(--w3);text-align:center;margin-top:6px;letter-spacing:.1em}}
 .lb-wrap{{padding:2px 14px 8px}}
-.lb-row{{display:flex;align-items:stretch;background:linear-gradient(180deg,var(--graphite),var(--carbon));border:0.5px solid var(--line2);border-radius:14px;margin-bottom:8px;overflow:hidden;position:relative;transition:transform .15s,border-color .15s}}
+.lb-row{{display:flex;align-items:stretch;background:linear-gradient(180deg,var(--graphite),var(--carbon));border:0.5px solid var(--line2);border-radius:14px;margin-bottom:8px;overflow:hidden;position:relative;cursor:pointer;transition:transform .15s,border-color .15s}}
+.lb-row:hover{{border-color:var(--gold-dim)}}
+.lb-row:hover .lb-go{{color:var(--gold2)}}
 .lb-row:active{{transform:scale(.995)}}
 .lb-row::before{{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--line3)}}
 .lb-row.r1::before{{background:linear-gradient(180deg,var(--gold3),var(--gold))}}
@@ -1363,7 +1395,8 @@ a{{color:var(--gold);cursor:pointer;text-decoration:none}}
 .lb-tk{{font-family:var(--num);font-size:.96rem;font-weight:600;color:var(--w1);letter-spacing:.04em}}
 .lb-nm{{font-family:var(--disp);font-size:.72rem;color:var(--w3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}}
 .lb-px{{font-family:var(--mono);font-size:.46rem;color:var(--w3);margin-top:5px;letter-spacing:.05em}}
-.lb-val{{flex-shrink:0;padding:11px 15px 11px 8px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;border-left:0.5px solid var(--line)}}
+.lb-val{{flex-shrink:0;padding:11px 10px 11px 8px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;border-left:0.5px solid var(--line)}}
+.lb-go{{display:flex;align-items:center;justify-content:center;padding:0 13px 0 5px;font-size:1.15rem;color:var(--w4);flex-shrink:0;transition:color .15s}}
 .lb-margin{{font-family:var(--num);font-size:1.32rem;font-weight:500;color:var(--jade2);line-height:1;white-space:nowrap}}
 .lb-tag{{font-family:var(--mono);font-size:.42rem;color:var(--gold);letter-spacing:.1em;margin-top:5px;white-space:nowrap}}
 .lb-mos{{font-family:var(--mono);font-size:.42rem;color:var(--w3);letter-spacing:.06em;margin-top:2px}}
@@ -1792,7 +1825,7 @@ function paintLeaders(d){{
     const rc=rank<=3?('r'+rank):'';
     const tc=rank<=3?'top':'';
     const tag=rank===1?'DEEPEST VALUE':(row.margin>=30?'DEEP VALUE':'UNDERVALUED');
-    return `<div class="lb-row ${{rc}}">
+    return `<div class="lb-row ${{rc}}" onclick="setQ('${{row.ticker}}')" title="Open ${{row.ticker}} in the Oracle">
       <div class="lb-rank ${{tc}}"><b>${{rank}}</b><small>RANK</small></div>
       <div class="lb-mid">
         <div class="lb-tk">${{row.ticker}}</div>
@@ -1804,6 +1837,7 @@ function paintLeaders(d){{
         <div class="lb-tag">✦ ${{tag}}</div>
         <div class="lb-mos">margin of safety</div>
       </div>
+      <div class="lb-go">›</div>
     </div>`;
   }}).join('');
 }}
