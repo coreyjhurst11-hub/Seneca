@@ -496,7 +496,114 @@ def get_health_ai(data):
         return msg.choices[0].message.content.strip()
     except: return None
 
+# ── Members' Leaderboard ──────────────────────────────────────────────────────
+import threading
+
+LEADERBOARD_REFRESH = 1800     # seconds between full re-scans (1800 = 30 min)
+SCAN_WORKERS        = 8         # parallel fetch threads (modest, avoids rate limits)
+LEADERBOARD_SIZE    = 15        # top-N shown
+
+# Curated universe of major NYSE-listed stocks. Scanning the entire ~2,400-name
+# NYSE live with this free, no-API-key data source isn't practical — it would
+# take hours and get rate limited — so we scan this liquid large-cap set.
+# Add or remove tickers freely.
+NYSE_UNIVERSE = [
+    "JPM","BAC","WFC","C","GS","MS","AXP","BLK","SPGI","V","MA","SCHW","COF","USB","PNC",
+    "BRK-B","JNJ","LLY","ABBV","MRK","PFE","ABT","TMO","DHR","BMY","UNH","CVS","MDT","ELV",
+    "WMT","PG","KO","PEP","MCD","HD","LOW","TGT","NKE","SBUX","CL","KMB","MDLZ","PM","MO",
+    "XOM","CVX","COP","SLB","OXY","EOG","PSX","MPC","VLO","KMI","WMB",
+    "CAT","DE","GE","HON","MMM","BA","LMT","RTX","UPS","FDX","UNP","EMR","ETN",
+    "DIS","T","VZ","CMCSA","CRM","ORCL","IBM","ACN","NOW","TXN",
+    "NEE","SO","DUK","D","AEP","EXC",
+    "F","GM","KR","DG","DLTR","ROST","TJX",
+]
+NYSE_UNIVERSE = list(dict.fromkeys(NYSE_UNIVERSE))
+
+_LB_LOCK = threading.Lock()
+LEADERBOARD = {
+    "status":  "building",         # "building" | "ready" | "error"
+    "updated": None,               # epoch seconds of last completed scan
+    "scanned": 0,
+    "total":   len(NYSE_UNIVERSE),
+    "rows":    [],
+}
+_lb_thread_started = False
+
+def _lb_scan_one(tk):
+    """Fetch one ticker, return slim leaderboard row or None."""
+    try:
+        d = fetch_quote(tk)
+        comp, price = d.get("composite"), d.get("price")
+        if comp and comp > 0 and price and price > 0:
+            return {
+                "ticker": d["ticker"], "name": d["name"], "sector": d["sector"],
+                "price": price, "composite": comp,
+                "margin": (comp - price) / price * 100,
+            }
+    except Exception:
+        return None
+    return None
+
+def _lb_build_loop():
+    """Background thread: rebuild the leaderboard on a timer, forever."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    while True:
+        with _LB_LOCK:
+            LEADERBOARD["status"]  = "building"
+            LEADERBOARD["scanned"] = 0
+            LEADERBOARD["total"]   = len(NYSE_UNIVERSE)
+        rows, done = [], 0
+        try:
+            with ThreadPoolExecutor(max_workers=SCAN_WORKERS) as ex:
+                futs = {ex.submit(_lb_scan_one, tk): tk for tk in NYSE_UNIVERSE}
+                for f in as_completed(futs):
+                    done += 1
+                    with _LB_LOCK:
+                        LEADERBOARD["scanned"] = done
+                    r = f.result()
+                    if r:
+                        rows.append(r)
+            rows.sort(key=lambda x: x["margin"], reverse=True)
+            with _LB_LOCK:
+                LEADERBOARD["rows"]    = rows[:LEADERBOARD_SIZE]
+                LEADERBOARD["updated"] = _time.time()
+                LEADERBOARD["status"]  = "ready"
+        except Exception as e:
+            with _LB_LOCK:
+                LEADERBOARD["status"] = "error"
+            print("[leaderboard] scan failed:", e)
+        _time.sleep(LEADERBOARD_REFRESH)
+
+def ensure_leaderboard_thread():
+    """Start the background scanner exactly once per process (lazy)."""
+    global _lb_thread_started
+    with _LB_LOCK:
+        if _lb_thread_started:
+            return
+        _lb_thread_started = True
+    threading.Thread(target=_lb_build_loop, daemon=True).start()
+
 # ── Routes ────────────────────────────────────────────────────────────────────
+
+@app.route("/api/leaderboard")
+def api_leaderboard():
+    ensure_leaderboard_thread()
+    email = session.get("email", "")
+    sub = session.get("sub", False)
+    if email and not sub:
+        u = get_user(email)
+        if u: sub = u.get("subscribed", False)
+    if not sub:
+        return jsonify({"error": "PAYWALL"}), 402
+    with _LB_LOCK:
+        out = {
+            "status":  LEADERBOARD["status"],
+            "updated": LEADERBOARD["updated"],
+            "scanned": LEADERBOARD["scanned"],
+            "total":   LEADERBOARD["total"],
+            "rows":    LEADERBOARD["rows"],
+        }
+    return jsonify(out)
 
 @app.route("/")
 def index():
@@ -1231,6 +1338,64 @@ a{{color:var(--gold);cursor:pointer;text-decoration:none}}
 .modal-price{{text-align:center;margin:8px 0 16px}}
 .modal-price-num{{font-size:2.2rem;font-weight:300;color:var(--gold3);line-height:1}}
 .modal-price-per{{font-family:var(--mono);font-size:.5rem;color:var(--w3);letter-spacing:.06em;margin-top:5px}}
+
+/* ── LEADERBOARD ── */
+.lb-statusbar{{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:.46rem;color:var(--w3);letter-spacing:.1em;padding:0 20px 11px}}
+.lb-live{{display:flex;align-items:center;gap:6px;color:var(--jade2)}}
+.lb-dot{{width:6px;height:6px;border-radius:50%;background:var(--jade2);box-shadow:0 0 8px var(--jade2);animation:lbPulse 1.6s ease-in-out infinite}}
+@keyframes lbPulse{{0%,100%{{opacity:.3}}50%{{opacity:1}}}}
+.lb-prog{{margin:0 20px 12px}}
+.lb-prog-track{{height:4px;border-radius:3px;background:var(--slate);overflow:hidden;border:0.5px solid var(--line2)}}
+.lb-prog-fill{{height:100%;background:linear-gradient(90deg,var(--gold),var(--jade2));transition:width .4s ease}}
+.lb-prog-txt{{font-family:var(--mono);font-size:.46rem;color:var(--w3);text-align:center;margin-top:6px;letter-spacing:.1em}}
+.lb-wrap{{padding:2px 14px 8px}}
+.lb-row{{display:flex;align-items:stretch;background:linear-gradient(180deg,var(--graphite),var(--carbon));border:0.5px solid var(--line2);border-radius:14px;margin-bottom:8px;overflow:hidden;position:relative;transition:transform .15s,border-color .15s}}
+.lb-row:active{{transform:scale(.995)}}
+.lb-row::before{{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--line3)}}
+.lb-row.r1::before{{background:linear-gradient(180deg,var(--gold3),var(--gold))}}
+.lb-row.r2::before{{background:linear-gradient(180deg,var(--w2),var(--w3))}}
+.lb-row.r3::before{{background:linear-gradient(180deg,var(--gold-dim),#5a3f10)}}
+.lb-rank{{width:46px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:var(--num);background:rgba(255,255,255,.012)}}
+.lb-rank b{{font-size:1.18rem;font-weight:500;color:var(--w2);line-height:1}}
+.lb-rank.top b{{color:var(--gold3)}}
+.lb-rank small{{font-family:var(--mono);font-size:.4rem;color:var(--w4);letter-spacing:.12em;margin-top:3px}}
+.lb-mid{{flex:1;min-width:0;padding:11px 10px 11px 6px;display:flex;flex-direction:column;justify-content:center}}
+.lb-tk{{font-family:var(--num);font-size:.96rem;font-weight:600;color:var(--w1);letter-spacing:.04em}}
+.lb-nm{{font-family:var(--disp);font-size:.72rem;color:var(--w3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}}
+.lb-px{{font-family:var(--mono);font-size:.46rem;color:var(--w3);margin-top:5px;letter-spacing:.05em}}
+.lb-val{{flex-shrink:0;padding:11px 15px 11px 8px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;border-left:0.5px solid var(--line)}}
+.lb-margin{{font-family:var(--num);font-size:1.32rem;font-weight:500;color:var(--jade2);line-height:1;white-space:nowrap}}
+.lb-tag{{font-family:var(--mono);font-size:.42rem;color:var(--gold);letter-spacing:.1em;margin-top:5px;white-space:nowrap}}
+.lb-mos{{font-family:var(--mono);font-size:.42rem;color:var(--w3);letter-spacing:.06em;margin-top:2px}}
+/* members lock */
+/* members lock — premium blurred teaser */
+.lb-locked-head{{display:flex;align-items:center;justify-content:space-between;padding:22px 20px 11px}}
+.lb-locked-tag{{font-family:var(--mono);font-size:.46rem;color:var(--gold-dim);letter-spacing:.12em;display:flex;align-items:center;gap:5px}}
+.lb-teaser{{position:relative;padding:2px 14px 18px;min-height:478px}}
+.lb-teaser-rows{{filter:blur(5px);opacity:.55;pointer-events:none;-webkit-mask-image:linear-gradient(180deg,#000 0%,#000 26%,transparent 90%);mask-image:linear-gradient(180deg,#000 0%,#000 26%,transparent 90%)}}
+.lb-ghost{{height:64px;display:flex;align-items:center;background:linear-gradient(180deg,var(--graphite),var(--carbon));border:0.5px solid var(--line2);border-radius:14px;margin-bottom:8px;padding:0 16px;gap:13px;position:relative;overflow:hidden}}
+.lb-ghost::before{{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--line3)}}
+.lb-ghost:nth-child(1)::before{{background:linear-gradient(180deg,var(--gold3),var(--gold))}}
+.lb-ghost:nth-child(2)::before{{background:linear-gradient(180deg,var(--w2),var(--w3))}}
+.lb-ghost:nth-child(3)::before{{background:linear-gradient(180deg,var(--gold-dim),#5a3f10)}}
+.lb-grank{{font-family:var(--num);font-size:1.18rem;color:var(--w3);width:24px;text-align:center;flex-shrink:0}}
+.lb-gcol{{flex:1;display:flex;flex-direction:column;gap:7px}}
+.lb-bar{{height:9px;border-radius:4px;background:linear-gradient(90deg,var(--slate2),var(--line3),var(--slate2));background-size:200% 100%;animation:lbShine 2.4s linear infinite}}
+@keyframes lbShine{{0%{{background-position:200% 0}}100%{{background-position:-200% 0}}}}
+.lb-teaser-overlay{{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:30px 24px 0}}
+.lb-glass{{background:rgba(8,8,8,.66);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);border:0.5px solid var(--line2);border-radius:22px;padding:26px 22px 24px;max-width:340px;width:100%;text-align:center;position:relative;box-shadow:0 26px 64px rgba(0,0,0,.62),inset 0 0 0 0.5px rgba(200,144,26,.14)}}
+.lb-glass::before{{content:'';position:absolute;top:0;left:22px;right:22px;height:1px;background:linear-gradient(90deg,transparent,var(--gold-dim),transparent)}}
+.lb-lock-gem{{width:48px;height:48px;margin:2px auto 16px;background:linear-gradient(135deg,var(--gold),var(--gold3));transform:rotate(45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 0 26px rgba(200,144,26,.45);animation:gemPulse 4.5s ease-in-out infinite}}
+.lb-lock-gem span{{transform:rotate(-45deg);font-size:1.05rem;color:#000;font-weight:900}}
+.lb-lock-title{{font-size:1.34rem;font-weight:300;color:var(--gold3);letter-spacing:.05em;margin-bottom:6px}}
+.lb-lock-sub{{font-family:var(--mono);font-size:.48rem;color:var(--w3);letter-spacing:.12em;margin-bottom:16px}}
+.lb-glass .paywall-feats{{margin:2px 0 14px;text-align:left}}
+.lb-glass-price{{font-family:var(--num);font-size:2.3rem;font-weight:300;color:var(--gold3);line-height:1}}
+.lb-glass-price small{{font-size:.8rem;color:var(--w3)}}
+.lb-glass-note{{font-family:var(--mono);font-size:.46rem;color:var(--w3);letter-spacing:.08em;margin:7px 0 15px}}
+.lb-glass-btn{{width:100%;height:48px;background:linear-gradient(135deg,var(--gold),var(--gold3));border:none;border-radius:12px;font-family:var(--mono);font-size:.62rem;font-weight:700;color:#000;letter-spacing:.12em;cursor:pointer}}
+.lb-glass-btn:active{{opacity:.85}}
+.lb-glass-foot{{font-family:var(--disp);font-size:.72rem;color:var(--w3);font-style:italic;margin-top:12px}}
 </style>
 </head>
 <body>
@@ -1331,6 +1496,62 @@ a{{color:var(--gold);cursor:pointer;text-decoration:none}}
   <div class="rail" id="trend-rail" style="flex-wrap:wrap;padding-bottom:8px"></div>
 </div>
 
+<div id="pane-leaders" class="pane hidden">
+
+  <!-- members-only lock (non-subscribers) -->
+  <div id="lb-lock" class="hidden">
+    <div class="lb-locked-head">
+      <div class="rail-title">◈ UNDERVALUATION LEADERBOARD</div>
+      <div class="lb-locked-tag">⚿ MEMBERS ONLY</div>
+    </div>
+    <div class="lb-teaser">
+      <div class="lb-teaser-rows">
+        <div class="lb-ghost"><div class="lb-grank">1</div><div class="lb-gcol"><div class="lb-bar" style="width:46%"></div><div class="lb-bar" style="width:68%;height:7px;opacity:.6"></div></div><div class="lb-bar" style="width:58px;height:18px"></div></div>
+        <div class="lb-ghost"><div class="lb-grank">2</div><div class="lb-gcol"><div class="lb-bar" style="width:38%"></div><div class="lb-bar" style="width:60%;height:7px;opacity:.6"></div></div><div class="lb-bar" style="width:52px;height:18px"></div></div>
+        <div class="lb-ghost"><div class="lb-grank">3</div><div class="lb-gcol"><div class="lb-bar" style="width:52%"></div><div class="lb-bar" style="width:72%;height:7px;opacity:.6"></div></div><div class="lb-bar" style="width:60px;height:18px"></div></div>
+        <div class="lb-ghost"><div class="lb-grank">4</div><div class="lb-gcol"><div class="lb-bar" style="width:42%"></div><div class="lb-bar" style="width:64%;height:7px;opacity:.6"></div></div><div class="lb-bar" style="width:50px;height:18px"></div></div>
+        <div class="lb-ghost"><div class="lb-grank">5</div><div class="lb-gcol"><div class="lb-bar" style="width:48%"></div><div class="lb-bar" style="width:56%;height:7px;opacity:.6"></div></div><div class="lb-bar" style="width:54px;height:18px"></div></div>
+        <div class="lb-ghost"><div class="lb-grank">6</div><div class="lb-gcol"><div class="lb-bar" style="width:40%"></div><div class="lb-bar" style="width:66%;height:7px;opacity:.6"></div></div><div class="lb-bar" style="width:48px;height:18px"></div></div>
+      </div>
+      <div class="lb-teaser-overlay">
+        <div class="lb-glass">
+          <div class="lb-lock-gem"><span>⚿</span></div>
+          <div class="lb-lock-title">Members Only</div>
+          <div class="lb-lock-sub">LIVE NYSE OPPORTUNITY INDEX</div>
+          <div class="paywall-feats">
+            <div class="pf-row"><span class="pf-check">✓</span> Top 15 most undervalued NYSE names</div>
+            <div class="pf-row"><span class="pf-check">✓</span> Ranked by Seneca Composite margin of safety</div>
+            <div class="pf-row"><span class="pf-check">✓</span> Auto-scanned &amp; refreshed continuously</div>
+            <div class="pf-row"><span class="pf-check">✓</span> Plus everything in Seneca Pro</div>
+          </div>
+          <div class="lb-glass-price">$3.99<small>/mo</small></div>
+          <div class="lb-glass-note">UNLIMITED ACCESS · CANCEL ANYTIME</div>
+          <button class="lb-glass-btn" onclick="clickSubscribe()">✦ UNLOCK SENECA PRO</button>
+          <div class="lb-glass-foot">Already a member? <a onclick="openModal('login')">Sign in</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- leaderboard content (subscribers) -->
+  <div id="lb-content" class="hidden">
+    <div class="rail-head">
+      <div class="rail-title">◈ UNDERVALUATION LEADERBOARD</div>
+      <div class="rail-act" id="lb-sync" onclick="loadLeaderboard(true)">↻ SYNC</div>
+    </div>
+    <div class="lb-statusbar">
+      <span class="lb-live"><span class="lb-dot"></span><span id="lb-livetxt">CONNECTING…</span></span>
+      <span>TOP 15 · NYSE · BY MARGIN OF SAFETY</span>
+    </div>
+    <div class="lb-prog hidden" id="lb-prog">
+      <div class="lb-prog-track"><div class="lb-prog-fill" id="lb-progfill" style="width:0%"></div></div>
+      <div class="lb-prog-txt" id="lb-progtxt">Scanning…</div>
+    </div>
+    <div class="lb-wrap" id="lb-rows"></div>
+  </div>
+
+</div>
+
 <div id="pane-minds" class="pane hidden">
   <div class="rail-head"><div class="rail-title">◈ MINDS BEHIND THE MODELS</div></div>
   <div id="minds-list" style="padding:0 14px 8px"></div>
@@ -1363,6 +1584,7 @@ a{{color:var(--gold);cursor:pointer;text-decoration:none}}
 <div class="dock">
   <div class="dock-item on" id="dock-oracle" onclick="switchPane('oracle')"><i class="dock-ic">◆</i><div class="dock-lb">ORACLE</div></div>
   <div class="dock-item" id="dock-watch" onclick="switchPane('watch')"><i class="dock-ic">◈</i><div class="dock-lb">WATCH</div></div>
+  <div class="dock-item" id="dock-leaders" onclick="switchPane('leaders')"><i class="dock-ic">▲</i><div class="dock-lb">LEADERS</div></div>
   <div class="dock-item" id="dock-minds" onclick="switchPane('minds')"><i class="dock-ic">✦</i><div class="dock-lb">MINDS</div></div>
   <div class="dock-item" id="dock-about" onclick="switchPane('about')"><i class="dock-ic">◇</i><div class="dock-lb">ABOUT</div></div>
 </div>
@@ -1484,14 +1706,107 @@ window.addEventListener('DOMContentLoaded',()=>{{
 
 // ── pane switching ──
 function switchPane(p){{
-  ['oracle','watch','minds','about'].forEach(x=>{{
+  ['oracle','watch','leaders','minds','about'].forEach(x=>{{
     document.getElementById('pane-'+x).classList.toggle('hidden',x!==p);
     document.getElementById('dock-'+x).classList.toggle('on',x===p);
   }});
   if(p==='watch') renderWLPage();
+  else if(p==='leaders') enterLeaders();
+  else stopLbPoll();
   window.scrollTo({{top:0,behavior:'smooth'}});
 }}
 function goHome(){{ switchPane('oracle'); }}
+
+// ── members' leaderboard ──
+let lbTimer=null;
+const LB_FAST=3000, LB_SLOW=60000;
+
+function enterLeaders(){{
+  const lock=document.getElementById('lb-lock');
+  const content=document.getElementById('lb-content');
+  if(!userSub){{
+    lock.classList.remove('hidden');
+    content.classList.add('hidden');
+    stopLbPoll();
+    return;
+  }}
+  lock.classList.add('hidden');
+  content.classList.remove('hidden');
+  loadLeaderboard(true);
+}}
+
+function stopLbPoll(){{ if(lbTimer){{ clearTimeout(lbTimer); lbTimer=null; }} }}
+
+function scheduleLb(status){{
+  stopLbPoll();
+  lbTimer=setTimeout(()=>loadLeaderboard(false), status==='ready'?LB_SLOW:LB_FAST);
+}}
+
+async function loadLeaderboard(spin){{
+  if(!userSub) return;
+  const btn=document.getElementById('lb-sync');
+  if(spin&&btn) btn.textContent='↻ SYNCING';
+  try{{
+    const r=await fetch('/api/leaderboard');
+    if(r.status===402){{ userSub=false; syncHeader(); enterLeaders(); return; }}
+    if(!r.ok) throw new Error('err');
+    const d=await r.json();
+    paintLeaders(d);
+    scheduleLb(d.status);
+  }}catch(e){{
+    scheduleLb('building');
+  }}finally{{
+    if(btn) btn.textContent='↻ SYNC';
+  }}
+}}
+
+function lbAgo(ts){{
+  if(!ts) return '—';
+  const s=Math.max(0,Math.floor(Date.now()/1000-ts));
+  if(s<60) return s+'s ago';
+  if(s<3600) return Math.floor(s/60)+'m ago';
+  return Math.floor(s/3600)+'h ago';
+}}
+
+function paintLeaders(d){{
+  const live=document.getElementById('lb-livetxt');
+  const prog=document.getElementById('lb-prog');
+  if(d.status==='building'){{
+    prog.classList.remove('hidden');
+    const pct=d.total?Math.round(d.scanned/d.total*100):0;
+    document.getElementById('lb-progfill').style.width=pct+'%';
+    document.getElementById('lb-progtxt').textContent='SCANNING NYSE UNIVERSE · '+d.scanned+' / '+d.total;
+    live.textContent='BUILDING INDEX';
+  }} else if(d.status==='error'){{
+    prog.classList.add('hidden'); live.textContent='SCAN ERROR · RETRYING';
+  }} else {{
+    prog.classList.add('hidden'); live.textContent='LIVE · UPDATED '+lbAgo(d.updated);
+  }}
+  const wrap=document.getElementById('lb-rows');
+  if(!d.rows||!d.rows.length){{
+    if(d.status!=='building') wrap.innerHTML='<div class="lb-prog-txt" style="padding:26px 0">No undervalued names in range right now. Check back after the next sync.</div>';
+    return;
+  }}
+  wrap.innerHTML=d.rows.map((row,i)=>{{
+    const rank=i+1;
+    const rc=rank<=3?('r'+rank):'';
+    const tc=rank<=3?'top':'';
+    const tag=rank===1?'DEEPEST VALUE':(row.margin>=30?'DEEP VALUE':'UNDERVALUED');
+    return `<div class="lb-row ${{rc}}">
+      <div class="lb-rank ${{tc}}"><b>${{rank}}</b><small>RANK</small></div>
+      <div class="lb-mid">
+        <div class="lb-tk">${{row.ticker}}</div>
+        <div class="lb-nm">${{row.name}}</div>
+        <div class="lb-px">PRICE ${{fp(row.price)}} · FAIR ${{fp(row.composite)}}</div>
+      </div>
+      <div class="lb-val">
+        <div class="lb-margin">▲ ${{row.margin.toFixed(0)}}%</div>
+        <div class="lb-tag">✦ ${{tag}}</div>
+        <div class="lb-mos">margin of safety</div>
+      </div>
+    </div>`;
+  }}).join('');
+}}
 
 // ── header sync ──
 function syncHeader(){{
