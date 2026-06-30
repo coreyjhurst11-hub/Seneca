@@ -24,6 +24,12 @@ STRIPE_SECRET_KEY      = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 STRIPE_PRICE_ID        = os.environ.get("STRIPE_PRICE_ID", "")
 STRIPE_WEBHOOK_SECRET  = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+
+# ── Google Analytics ──────────────────────────────────────────────────────────
+# Paste your GA4 Measurement ID here (looks like "G-ABCD1234"). You can also set
+# it via the GA_MEASUREMENT_ID environment variable. Leave the placeholder as-is
+# to disable analytics (no tracking script is injected when it's unset/placeholder).
+GA_MEASUREMENT_ID = os.environ.get("GA_MEASUREMENT_ID", "G-QBNR5XWKVS")
 GROQ_API_KEY           = os.environ.get("GROQ_API_KEY", "")
 
 # ── User store (with watchlist) ───────────────────────────────────────────────
@@ -659,7 +665,7 @@ def success():
     else:
         session["sub"] = True
         if email: set_subscribed(email)
-    return render_app(sub=True, email=email, toast="✦ Subscription active! Unlimited access unlocked.")
+    return render_app(sub=True, email=email, toast="✦ Subscription active! Unlimited access unlocked.", purchase=True, txn=request.args.get("session_id",""))
 
 @app.route("/api/signup", methods=["POST"])
 def api_signup():
@@ -1002,12 +1008,25 @@ def api_pdf():
     except Exception as e: return jsonify({"error":str(e)}), 500
 
 # ── HTML ──────────────────────────────────────────────────────────────────────
-def render_app(sub=False, email="", toast=""):
+def render_app(sub=False, email="", toast="", purchase=False, txn=""):
     stripe_pk = STRIPE_PUBLISHABLE_KEY
     safe_toast = toast.replace('"', '&quot;')
     toast_js = f'toast("{safe_toast}");' if toast else ""
+    _txn = (txn or "").replace("'", "").replace('"', "")
+    purchase_js = (
+        "track('purchase',{value:3.99,currency:'USD',transaction_id:'" + _txn + "',"
+        "items:[{item_id:'seneca_pro',item_name:'Seneca Pro',price:3.99}]});"
+    ) if purchase else ""
+    _ga = (GA_MEASUREMENT_ID or "").strip()
+    ga = ""
+    if _ga and "XXXX" not in _ga.upper():   # inject unless it's the unset placeholder
+        ga = (
+            '<script async src="https://www.googletagmanager.com/gtag/js?id=' + _ga + '"></script>'
+            '<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}'
+            'gtag("js",new Date());gtag("config","' + _ga + '");</script>'
+        )
     return f"""<!DOCTYPE html>
-<html lang="en"><head>
+<html lang="en"><head>{ga}
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1"/>
 <title>SENECA ◆ Intrinsic Value Oracle</title>
@@ -1442,7 +1461,7 @@ a{{color:var(--gold);cursor:pointer;text-decoration:none}}
     <div class="cmd-clock" id="cmd-clock"></div>
     <button class="cmd-btn hidden" id="btn-login" onclick="openModal('login')">SIGN IN</button>
     <button class="cmd-btn hidden" id="btn-acct" onclick="openModal('acct')">◆ ACCT</button>
-    <button class="cmd-btn cmd-btn-pro" id="btn-sub" onclick="clickSubscribe()">✦ PRO</button>
+    <button class="cmd-btn cmd-btn-pro" id="btn-sub" onclick="clickSubscribe('header')">✦ PRO</button>
   </div>
 </div>
 
@@ -1559,7 +1578,7 @@ a{{color:var(--gold);cursor:pointer;text-decoration:none}}
           </div>
           <div class="lb-glass-price">$3.99<small>/mo</small></div>
           <div class="lb-glass-note">UNLIMITED ACCESS · CANCEL ANYTIME</div>
-          <button class="lb-glass-btn" onclick="clickSubscribe()">✦ UNLOCK SENECA PRO</button>
+          <button class="lb-glass-btn" onclick="clickSubscribe('leaderboard_paywall')">✦ UNLOCK SENECA PRO</button>
           <div class="lb-glass-foot">Already a member? <a onclick="openModal('login')">Sign in</a></div>
         </div>
       </div>
@@ -1608,7 +1627,7 @@ a{{color:var(--gold);cursor:pointer;text-decoration:none}}
     <div class="about-pricing">
       <div class="about-price">$3.99<small>/mo</small></div>
       <div class="about-price-note">UNLIMITED LOOKUPS · CANCEL ANYTIME</div>
-      <button class="about-sub-btn" onclick="clickSubscribe()">✦ UNLOCK SENECA PRO</button>
+      <button class="about-sub-btn" onclick="clickSubscribe('about_page')">✦ UNLOCK SENECA PRO</button>
     </div>
     <div class="disc"><p>✦ Seneca is for educational and research purposes only. Nothing here constitutes financial advice. Always conduct your own due diligence.</p></div>
   </div>
@@ -1735,6 +1754,7 @@ window.addEventListener('DOMContentLoaded',()=>{{
   syncHeader();
   renderMinds();
   {toast_js}
+  {purchase_js}
 }});
 
 // ── pane switching ──
@@ -1758,11 +1778,13 @@ function enterLeaders(){{
   const lock=document.getElementById('lb-lock');
   const content=document.getElementById('lb-content');
   if(!userSub){{
+    track('leaderboard_locked_view');
     lock.classList.remove('hidden');
     content.classList.add('hidden');
     stopLbPoll();
     return;
   }}
+  track('leaderboard_view');
   lock.classList.add('hidden');
   content.classList.remove('hidden');
   loadLeaderboard(true);
@@ -1825,7 +1847,7 @@ function paintLeaders(d){{
     const rc=rank<=3?('r'+rank):'';
     const tc=rank<=3?'top':'';
     const tag=rank===1?'DEEPEST VALUE':(row.margin>=30?'DEEP VALUE':'UNDERVALUED');
-    return `<div class="lb-row ${{rc}}" onclick="setQ('${{row.ticker}}')" title="Open ${{row.ticker}} in the Oracle">
+    return `<div class="lb-row ${{rc}}" onclick="lbOpen('${{row.ticker}}')" title="Open ${{row.ticker}} in the Oracle">
       <div class="lb-rank ${{tc}}"><b>${{rank}}</b><small>RANK</small></div>
       <div class="lb-mid">
         <div class="lb-tk">${{row.ticker}}</div>
@@ -1857,6 +1879,8 @@ function syncHeader(){{
 }}
 
 // ── input ──
+function track(n,p){{ try{{ if(window.gtag) gtag('event', n, p||{{}}); }}catch(e){{}} }}
+function lbOpen(t){{ track('leaderboard_row_click',{{ticker:t}}); setQ(t); }}
 function setQ(v){{ document.getElementById('search').value=v; doAnalyze(); }}
 document.getElementById('search').addEventListener('keydown',e=>{{ if(e.key==='Enter'){{e.preventDefault();doAnalyze();}} }});
 document.getElementById('search').addEventListener('input',e=>{{ e.target.value=e.target.value.toUpperCase(); }});
@@ -1874,11 +1898,12 @@ async function doAnalyze(){{
   setStatus('Consulting the oracle for '+t+'…','var(--gold)');
   try{{
     const r=await fetch('/api/quote?q='+encodeURIComponent(t));
-    if(r.status===402){{ document.getElementById('spinner').classList.remove('on'); document.getElementById('btn-go').disabled=false; setStatus('Free lookup used','var(--w3)'); openModal('pay'); return; }}
+    if(r.status===402){{ document.getElementById('spinner').classList.remove('on'); document.getElementById('btn-go').disabled=false; setStatus('Free lookup used','var(--w3)'); track('paywall_hit',{{source:'oracle_lookup',ticker:t}}); openModal('pay'); return; }}
     if(!r.ok){{ const e=await r.json(); throw new Error(e.error||'Server error'); }}
     const d=await r.json();
     render(d);
     setStatus('Analysis complete · '+d.ticker+' · '+new Date().toLocaleTimeString(),'var(--jade)');
+    track('consult_oracle',{{ticker:d.ticker,asset_type:d.asset_type||'stock'}});
     loadAI(d.ticker);
     loadHealthAI(d.ticker);
     loadLeadership(d.ticker);
@@ -2268,7 +2293,8 @@ function switchModal(from,to){{ closeModal(from); openModal(to.replace('modal-',
 }});
 
 // ── SUBSCRIBE ──
-function clickSubscribe(){{
+function clickSubscribe(source){{
+  track('subscribe_click',{{source:source||'header',logged_in:!!userEmail}});
   if(userSub){{ toast('✦ You already have full access!'); return; }}
   if(userEmail){{ launchStripe(); }}
   else {{ openModal('signup'); }}
