@@ -239,6 +239,20 @@ def gordon_ddm(div_ps, div_growth_pct, beta):
     denom = max(r - g, 0.02)
     return (div_ps * (1 + g)) / denom
 
+def excess_returns(bvps, roe_pct, beta, g=TERMINAL_G):
+    # Residual-income / excess-returns model — the correct intrinsic-value tool for
+    # banks & insurers. Justified P/B = (ROE − g)/(r − g); Fair Value = Book × P/B.
+    # It rewards a financial for earning ROE above its cost of equity using BOOK
+    # VALUE, sidestepping the premium-float distortion that wrecks an FCF model.
+    if bvps <= 0 or roe_pct <= 0: return None
+    r = capm_r(beta)
+    roe = roe_pct / 100.0
+    g = min(g, r - 0.01)
+    denom = max(r - g, 0.02)
+    jpb = (roe - g) / denom
+    jpb = max(0.2, min(jpb, 6.0))          # keep the justified multiple in a sane band
+    return bvps * jpb
+
 def etf_ddm(price, div_yield_pct, beta):
     # ETF DDM: CAPM-based r, 2.5% long-run growth, denominator floored.
     if div_yield_pct <= 0: return None
@@ -249,8 +263,15 @@ def etf_ddm(price, div_yield_pct, beta):
     denom = max(r - g, 0.03)
     return (div_ps * (1 + g)) / denom
 
-def comp_stock(vals):
-    w={"gn":.18,"gg":.13,"buf":.22,"lyn":.13,"sim":.09,"dcf":.15,"ddm":.10}; t=ws=0
+def comp_stock(vals, fin=False):
+    # For financials the "dcf" slot holds the Excess Returns value (not FCF), and the
+    # weighting leans on book/ROE, dividends, and earnings — where insurers & banks
+    # are genuinely valued — giving a deserving insurer a real path to the top.
+    if fin:
+        w={"gn":.16,"gg":.12,"buf":.16,"lyn":.10,"sim":.05,"dcf":.26,"ddm":.15}
+    else:
+        w={"gn":.18,"gg":.13,"buf":.22,"lyn":.13,"sim":.09,"dcf":.15,"ddm":.10}
+    t=ws=0
     for k,wt in w.items():
         v=vals.get(k)
         if v and v>0: t+=v*wt; ws+=wt
@@ -458,12 +479,13 @@ def fetch_quote(query):
         atype="etf"
     else:
         _ddm_val = gordon_ddm(_div_ps, _div_growth, beta)
+        _exr_val = excess_returns(bvps, roe, beta) if fin else None
         vd={"gn":gn(eps,bvps),"gg":gg(eps,growth),"buf":buf(eps,growth),
             "lyn":lyn(eps,growth),"sim":sim(price,pe or 1,pb or 1,roe,mom),
-            "dcf":(None if fin else fdcf(fcf_ps,growth)),   # FCF float-trap: invalid for financials
+            "dcf":(_exr_val if fin else fdcf(fcf_ps,growth)),  # financials → Excess Returns (no float)
             "ddm":_ddm_val}
-        _sanitize_models(vd, price)                          # strip data-error outliers
-        comp=comp_stock(vd); models=[]
+        _sanitize_models(vd, price)                            # strip data-error outliers
+        comp=comp_stock(vd, fin=fin); models=[]
         for k,nm,fm,sc,cl in [
             ("gn", "GRAHAM NUMBER",      "√( 22.5 × EPS × Book Value )",                 "gold","gold"),
             ("gg", "GRAHAM GROWTH",      "EPS × (8.5+2g) × 4.4/AAA yield",              "gold","gold"),
@@ -473,8 +495,9 @@ def fetch_quote(query):
             ("dcf","FREE CASH FLOW DCF", "10yr FCF @ 10% · 2.5% terminal",               "muted","muted"),
             ("ddm","GORDON GROWTH DDM",  "D1 ÷ (CAPM rate − div growth%) · dividend-payers only","gold","gold"),
         ]:
+            if k=="dcf" and fin:
+                nm,fm,sc,cl = "EXCESS RETURNS","Book × (ROE − g) ÷ (r − g) · financials","gold","gold"
             v=vd.get(k); sc2,st2=signal(v,price) if v else ("na","Insufficient data")
-            if k=="dcf" and fin: sc2,st2=("na","Excluded · premium float distorts FCF for financials")
             models.append({"name":nm,"formula":fm,"stripe":sc,"cls":cl,"value":v,"sig_cls":sc2,"sig_txt":st2})
         atype="stock"
 
