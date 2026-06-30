@@ -170,6 +170,18 @@ def is_fund(ticker, info):
     if ticker.upper() in ETF_SET: return True
     return (info.get("quoteType") or "").upper() in ("ETF","MUTUALFUND","INDEX")
 
+def is_financial(sector, info):
+    # Banks, insurers, capital markets — and managed-care plans, which collect
+    # premiums up front just like insurers. For all of these, standard FCF is
+    # distorted by "float" and must not drive intrinsic value.
+    s = (sector or "").lower()
+    ind = (info.get("industry") or "").lower()
+    if "financial" in s: return True
+    if any(k in ind for k in ("insurance","bank","capital market","asset management","financial")):
+        return True
+    if "healthcare plan" in ind: return True
+    return False
+
 def resolve_ticker(q):
     import yfinance as yf; q = q.strip()
     if len(q) <= 6 and q.replace("-","").replace(".","").isalpha(): return q.upper()
@@ -183,19 +195,33 @@ def resolve_ticker(q):
     return q.upper()
 
 # ── Valuation models ──────────────────────────────────────────────────────────
+# Hard ceilings that stop the classic screener blow-ups:
+#  • TERMINAL_G  — perpetual growth can never approach the discount rate (Gordon
+#                  asymptote). Capped at long-run GDP (~2.5%).
+#  • GROWTH_CAP  — near-term annual growth fed into 10yr projections, so a 30%/yr
+#                  assumption can't compound a fair value into the stratosphere.
+TERMINAL_G = 0.025
+GROWTH_CAP = 0.12
+
 def gn(e,b): return math.sqrt(22.5*e*b) if e>0 and b>0 else None
-def gg(e,g): return e*(8.5+2*g)*4.4/4.5 if e>0 and g else None
+def gg(e,g):
+    if e<=0 or not g: return None
+    g=max(min(g,20.0),-20.0)                       # cap growth% so (8.5+2g) can't explode
+    return e*(8.5+2*g)*4.4/4.5
 def buf(e,g):
     if e<=0 or not g: return None
-    r,d=min(g/100,.25),.09
+    r,d=min(max(g/100,0.0),GROWTH_CAP),.09         # near-term growth capped at GROWTH_CAP
     return sum(e*(1+r)**y/(1+d)**y for y in range(1,11))+(e*(1+r)**10*15)/(1+d)**10
-def lyn(e,g): return e*g if e>0 and g>0 else None
+def lyn(e,g):
+    if e<=0 or g<=0: return None
+    return e*min(g,25.0)                            # PEG=1 fair value, growth% capped
 def sim(p,pe,pb,roe,mom):
     if pe<=0 or pb<=0 or roe<=0: return None
     return p*(roe/pe)*(1/pb)*(1+(mom/100)*0.3)*12
 def fdcf(f,g):
     if f<=0 or not g: return None
-    r,d,tg=min(g/100,.30),.10,.025
+    r,d=min(max(g/100,0.0),GROWTH_CAP),.10
+    tg=min(TERMINAL_G,d-0.04)                       # terminal growth always well below discount
     return sum(f*(1+r)**y/(1+d)**y for y in range(1,11))+(f*(1+r)**10*(1+tg)/(d-tg))/(1+d)**10
 
 def capm_r(beta):
@@ -204,24 +230,24 @@ def capm_r(beta):
     return 0.043 + b * 0.055
 
 def gordon_ddm(div_ps, div_growth_pct, beta):
-    # Gordon Growth Model: P = D1/(r-g)
-    # D1 = D0*(1+g), r = CAPM rate, g capped at 3.5% and must be < r
+    # Gordon Growth Model: P = D1/(r-g); g hard-capped at 3% (≈ GDP) and below r,
+    # with a denominator floor so (r-g) can never collapse toward zero.
     if div_ps <= 0: return None
     r = capm_r(beta)
-    g = min(div_growth_pct / 100 if div_growth_pct else 0.02, 0.035, r - 0.01)
+    g = min(div_growth_pct / 100 if div_growth_pct else 0.02, 0.03, r - 0.01)
     if g <= 0: g = 0.02
-    if r <= g: return None
-    return (div_ps * (1 + g)) / (r - g)
+    denom = max(r - g, 0.02)
+    return (div_ps * (1 + g)) / denom
 
 def etf_ddm(price, div_yield_pct, beta):
-    # ETF DDM: CAPM-based r, 2.5% long-run growth
+    # ETF DDM: CAPM-based r, 2.5% long-run growth, denominator floored.
     if div_yield_pct <= 0: return None
     div_ps = price * (div_yield_pct / 100)
     if div_ps <= 0: return None
     r = capm_r(beta)
-    g = 0.025
-    if r <= g: r = g + 0.03
-    return (div_ps * (1 + g)) / (r - g)
+    g = TERMINAL_G
+    denom = max(r - g, 0.03)
+    return (div_ps * (1 + g)) / denom
 
 def comp_stock(vals):
     w={"gn":.18,"gg":.13,"buf":.22,"lyn":.13,"sim":.09,"dcf":.15,"ddm":.10}; t=ws=0
@@ -229,6 +255,15 @@ def comp_stock(vals):
         v=vals.get(k)
         if v and v>0: t+=v*wt; ws+=wt
     return t/ws if ws>0 else None
+
+def _sanitize_models(d, price, max_mult=4.0):
+    # Drop non-finite, non-positive, or absurd outputs (> max_mult × price). A fair
+    # value implying >300% upside is far more likely a units/float/per-share data
+    # error than a real opportunity, so it must not pollute the composite.
+    for k, v in list(d.items()):
+        if v is None: continue
+        if (not math.isfinite(v)) or v <= 0 or (price > 0 and v > price * max_mult):
+            d[k] = None
 
 def signal(val, price):
     if not val or val<=0: return "na","Insufficient data"
@@ -362,7 +397,7 @@ def fetch_quote(query):
     t = yf.Ticker(ticker); fi = t.fast_info
     price=float(fi.last_price or 0); prev=float(fi.previous_close or 0)
     lo52=float(fi.year_low or 0); hi52=float(fi.year_high or 0)
-    cap=float(fi.market_cap or 0); shares=float(fi.shares or 1)
+    cap=float(fi.market_cap or 0); shares=float(fi.shares or 0)
     if not price:
         # Friendly error messages based on what went wrong
         if len(ticker) > 6:
@@ -388,12 +423,19 @@ def fetch_quote(query):
     # Dividend growth rate: use 5yr avg or earnings growth as proxy
     _div_growth = (g("fiveYearAvgDividendYield") or g("earningsGrowth") or 0) * 100
     if _div_growth < 0: _div_growth = 0
-    fcf_ps=g("freeCashflow")/shares if shares else 0
+    # Robust shares-outstanding: fast_info.shares is frequently missing, which would
+    # turn aggregate FCF into a fake per-share number (the 1,000%-margin bug).
+    if not shares or shares < 1000:
+        shares = g("sharesOutstanding") or (cap/price if price>0 else 0)
+    fcf_ps = g("freeCashflow")/shares if shares else 0
+    # Reject implausible FCF/share (>50% FCF yield ⇒ bad data, aggregate value, or float).
+    if price>0 and abs(fcf_ps) > price*0.5: fcf_ps = 0
     growth=(g("earningsGrowth") or g("revenueGrowth") or g("earningsQuarterlyGrowth") or 0)*100
     chg=(price-prev)/prev*100 if prev else 0
     mom=(price-lo52)/lo52*100 if lo52 else 0
     ey=(1/pe*100) if pe>0 else 0
     fund = is_fund(ticker, info)
+    fin = is_financial(sector, info)
     health = compute_health_score(info, is_etf=fund)
 
     if fund:
@@ -402,6 +444,7 @@ def fetch_quote(query):
         if pe>0: iv["per"]=price*(17.0/pe)
         _etf_ddm_val = etf_ddm(price, div_y, beta)
         if _etf_ddm_val: iv["ddm"] = _etf_ddm_val
+        _sanitize_models(iv, price)
         models=[]
         for k,nm,fm,sc,cl in [
             ("fed","FED MODEL",         "Price × (Earnings Yield ÷ Treasury 4.3%)",          "turq","turq"),
@@ -416,8 +459,10 @@ def fetch_quote(query):
     else:
         _ddm_val = gordon_ddm(_div_ps, _div_growth, beta)
         vd={"gn":gn(eps,bvps),"gg":gg(eps,growth),"buf":buf(eps,growth),
-            "lyn":lyn(eps,growth),"sim":sim(price,pe or 1,pb or 1,roe,mom),"dcf":fdcf(fcf_ps,growth),
+            "lyn":lyn(eps,growth),"sim":sim(price,pe or 1,pb or 1,roe,mom),
+            "dcf":(None if fin else fdcf(fcf_ps,growth)),   # FCF float-trap: invalid for financials
             "ddm":_ddm_val}
+        _sanitize_models(vd, price)                          # strip data-error outliers
         comp=comp_stock(vd); models=[]
         for k,nm,fm,sc,cl in [
             ("gn", "GRAHAM NUMBER",      "√( 22.5 × EPS × Book Value )",                 "gold","gold"),
@@ -429,6 +474,7 @@ def fetch_quote(query):
             ("ddm","GORDON GROWTH DDM",  "D1 ÷ (CAPM rate − div growth%) · dividend-payers only","gold","gold"),
         ]:
             v=vd.get(k); sc2,st2=signal(v,price) if v else ("na","Insufficient data")
+            if k=="dcf" and fin: sc2,st2=("na","Excluded · premium float distorts FCF for financials")
             models.append({"name":nm,"formula":fm,"stripe":sc,"cls":cl,"value":v,"sig_cls":sc2,"sig_txt":st2})
         atype="stock"
 
