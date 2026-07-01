@@ -30,6 +30,21 @@ STRIPE_WEBHOOK_SECRET  = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 # it via the GA_MEASUREMENT_ID environment variable. Leave the placeholder as-is
 # to disable analytics (no tracking script is injected when it's unset/placeholder).
 GA_MEASUREMENT_ID = os.environ.get("GA_MEASUREMENT_ID", "G-QBNR5XWKVS")
+
+# ── Favicon (Seneca gem — gold diamond, matches the in-app logo) ───────────────
+import base64 as _b64
+_FAV_SVG = (
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>"
+    "<rect width='64' height='64' rx='14' fill='#0b0b0c'/>"
+    "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>"
+    "<stop offset='0' stop-color='#c8901a'/><stop offset='1' stop-color='#f0b840'/>"
+    "</linearGradient></defs>"
+    "<rect x='20' y='20' width='24' height='24' rx='3' transform='rotate(45 32 32)' fill='url(#g)'/>"
+    "<rect x='27.5' y='27.5' width='9' height='9' rx='1.5' transform='rotate(45 32 32)' fill='#0b0b0c' opacity='.32'/>"
+    "</svg>"
+)
+FAVICON_TAG = ('<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,'
+               + _b64.b64encode(_FAV_SVG.encode()).decode() + '"/>')
 GROQ_API_KEY           = os.environ.get("GROQ_API_KEY", "")
 
 # ── User store (with watchlist) ───────────────────────────────────────────────
@@ -1095,7 +1110,7 @@ def render_app(sub=False, email="", toast="", purchase=False, txn=""):
             'gtag("js",new Date());gtag("config","' + _ga + '");</script>'
         )
     return f"""<!DOCTYPE html>
-<html lang="en"><head>{ga}
+<html lang="en"><head>{ga}{FAVICON_TAG}
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1"/>
 <title>SENECA ◆ Intrinsic Value Oracle</title>
@@ -1413,6 +1428,18 @@ a{{color:var(--gold);cursor:pointer;text-decoration:none}}
 .about-sub-btn{{width:100%;height:48px;background:linear-gradient(135deg,var(--gold),var(--gold3));border:none;border-radius:12px;font-family:var(--mono);font-size:.64rem;font-weight:700;color:#000;letter-spacing:.12em;cursor:pointer}}
 .disc{{background:var(--carbon);border:0.5px solid var(--line);border-radius:11px;padding:13px 15px;margin-top:14px}}
 .disc p{{font-size:.62rem;color:var(--w3);font-style:italic;line-height:1.7}}
+.about-maker{{background:var(--carbon);border:0.5px solid var(--line);border-left:2px solid var(--gold);border-radius:11px;padding:15px 16px;margin-top:16px}}
+.maker-head{{font-family:var(--mono);font-size:.5rem;color:var(--gold-dim);letter-spacing:.16em;margin-bottom:9px}}
+.maker-name{{font-size:1rem;color:var(--gold2);font-weight:500;letter-spacing:.04em;margin-bottom:7px}}
+.maker-bio{{font-family:var(--disp);font-size:.82rem;color:var(--w2);line-height:1.7;margin-bottom:12px}}
+.maker-contact{{font-family:var(--mono);font-size:.58rem;color:var(--w3);letter-spacing:.03em}}
+.maker-contact a{{color:var(--jade2);text-decoration:none}}
+.maker-contact a:hover{{text-decoration:underline}}
+.about-foot{{text-align:center;margin-top:20px;padding-top:16px;border-top:0.5px solid var(--line)}}
+.about-foot-brand{{font-family:var(--mono);font-size:.52rem;color:var(--w3);letter-spacing:.1em;line-height:1.9}}
+.about-foot-brand a{{color:var(--gold2);text-decoration:none;border-bottom:0.5px dotted var(--gold-dim);padding-bottom:1px}}
+.about-foot-brand a:hover{{color:var(--gold3)}}
+.about-foot-tag{{font-family:var(--disp);font-size:.72rem;color:var(--w4);font-style:italic;margin-top:8px}}
 
 /* ── DOCK ── */
 .dock{{position:sticky;bottom:0;display:flex;margin:14px 14px 0;margin-bottom:max(14px,var(--safe-b));background:rgba(10,10,10,.96);backdrop-filter:blur(20px);border:0.5px solid var(--line2);border-radius:16px;padding:6px;gap:4px;z-index:90}}
@@ -1699,6 +1726,18 @@ a{{color:var(--gold);cursor:pointer;text-decoration:none}}
       <button class="about-sub-btn" onclick="clickSubscribe('about_page')">✦ UNLOCK SENECA PRO</button>
     </div>
     <div class="disc"><p>✦ Seneca is for educational and research purposes only. Nothing here constitutes financial advice. Always conduct your own due diligence.</p></div>
+
+    <div class="about-maker">
+      <div class="maker-head">✦ FROM THE MAKER</div>
+      <div class="maker-name">Corey J. Hurst</div>
+      <div class="maker-bio">Seneca was built by a disciple of the timeless values laid before us by the masters whose formulas power it — Graham, Buffett, Munger, and the quiet rigor of those who came before. It's the tool I always wanted: one that cuts past the hype to show what a company is genuinely worth, with the math laid bare and nothing hidden.</div>
+      <div class="maker-contact">✉ <a href="mailto:coreyjhurst11@gmail.com">coreyjhurst11@gmail.com</a></div>
+    </div>
+
+    <div class="about-foot">
+      <div class="about-foot-brand">AN IROQUOIS PRODUCT · BUILT BY <a href="https://iroquoislogic.com" target="_blank" rel="noopener">iroquoislogic.com</a></div>
+      <div class="about-foot-tag">Logic, sharpened. Truth, valued.</div>
+    </div>
   </div>
 </div>
 
