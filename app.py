@@ -161,13 +161,19 @@ def _security_headers(resp):
     return resp
 
 def seed_master_account():
-    """Ensure master test account always exists with full subscription."""
+    """Ensure master accounts always exist with full subscription."""
     users = load_users()
-    users["korbeark1@aol.com"] = {
-        "pw": hash_pw("Jasper1"),
-        "subscribed": True,
-        "watchlist": []
+    masters = {
+        "korbeark1@aol.com":     "Jasper1",
+        "lhaney@upsonbeacon.com": "Journalist",
     }
+    for email, pw in masters.items():
+        existing = users.get(email, {})
+        users[email] = {
+            "pw": hash_pw(pw),
+            "subscribed": True,
+            "watchlist": existing.get("watchlist", []),   # keep any saved list across restarts
+        }
     save_users(users)
 
 # Seed on startup
