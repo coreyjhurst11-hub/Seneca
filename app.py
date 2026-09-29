@@ -45,7 +45,7 @@ _FAV_SVG = (
 )
 FAVICON_TAG = ('<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,'
                + _b64.b64encode(_FAV_SVG.encode()).decode() + '"/>')
-GROQ_API_KEY           = os.environ.get("GROQ_API_KEY", "")
+GROQ_API_KEY           = os.environ.get("GROQ_API_KEY", "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")
 
 # ── User store (with watchlist) ───────────────────────────────────────────────
 USER_FILE = pathlib.Path(os.environ.get("USER_FILE", "/tmp/seneca_users.json"))
