@@ -572,57 +572,55 @@ def _fetch_quote_impl(query):
             "health":health}
 
 # ── AI ────────────────────────────────────────────────────────────────────────
-def get_ai_verdict(data):
+def _groq_chat(prompt, max_tokens=700):
+    """Single Groq entry point for all AI features. Uses low reasoning effort so
+    gpt-oss models spend the token budget on the visible answer instead of hidden
+    reasoning (which was cutting replies off mid-sentence). Falls back automatically
+    if a model doesn't accept reasoning_effort, and logs the real error if it fails."""
     if not GROQ_API_KEY: return None
     try:
         from groq import Groq
         c = Groq(api_key=GROQ_API_KEY)
-        comp_str = f"${data['composite']:.2f}" if data['composite'] else 'N/A'
-        p = (f"You are SENECA, a stoic value investing oracle. 3 sentences explaining why "
-             f"{data['name']} ({data['ticker']}) appears {data['verdict_cls']}:\n"
-             f"Price ${data['price']:.2f} | Fair Value {comp_str} | P/E {data['pe']:.1f} | "
-             f"Verdict: {data['verdict_text']}\nDirect, wise, no disclaimers, no bullets.")
-        msg = c.chat.completions.create(
-            model=GROQ_MODEL,
-            max_tokens=200,
-            messages=[{"role":"user","content":p}]
-        )
-        return msg.choices[0].message.content.strip()
+        base = dict(model=GROQ_MODEL, max_tokens=max_tokens,
+                    messages=[{"role":"user","content":prompt}])
+        try:
+            msg = c.chat.completions.create(reasoning_effort="low", **base)
+        except Exception:
+            msg = c.chat.completions.create(**base)   # model rejects reasoning_effort → retry plain
+        return ((msg.choices[0].message.content or "").strip()) or None
     except Exception as e:
         print(f"[seneca-ai] Groq call failed: {e}")
         return None
 
+def get_ai_verdict(data):
+    if not GROQ_API_KEY: return None
+    comp_str = f"${data['composite']:.2f}" if data['composite'] else 'N/A'
+    p = (f"You are SENECA, a stoic value investing oracle. 3 sentences explaining why "
+         f"{data['name']} ({data['ticker']}) appears {data['verdict_cls']}:\n"
+         f"Price ${data['price']:.2f} | Fair Value {comp_str} | P/E {data['pe']:.1f} | "
+         f"Verdict: {data['verdict_text']}\nDirect, wise, no disclaimers, no bullets.")
+    return _groq_chat(p, max_tokens=800)
+
 def get_health_ai(data):
     """LLM layer: cross-verify health flags, probe for hidden risks"""
     if not GROQ_API_KEY: return None
-    try:
-        from groq import Groq
-        c = Groq(api_key=GROQ_API_KEY)
-        h=data.get("health",{})
-        flags=h.get("flags",[])
-        score=h.get("score",0)
-        grade=h.get("grade","?")
-        breakdown=h.get("breakdown",{})
-        bd_str="; ".join(f"{k}: {v}" for k,v in list(breakdown.items())[:8])
-        p = (f"You are SENECA's financial forensics engine. Analyze {data['name']} ({data['ticker']}) "
-             f"for hidden financial risks, accounting irregularities, and off-balance-sheet concerns.\n\n"
-             f"Quantitative health score: {score}/100 (Grade {grade})\n"
-             f"Key metrics: {bd_str}\n"
-             f"Flagged concerns: {', '.join(flags) if flags else 'None detected'}\n"
-             f"Sector: {data['sector']} | P/E: {data['pe']:.1f} | D/E: implied from score\n\n"
-             f"In exactly 3 sentences: (1) Confirm or challenge the health score with your assessment. "
-             f"(2) Identify the single biggest hidden risk an investor might miss. "
-             f"(3) Give a plain verdict on financial integrity. "
-             f"Be direct. No disclaimers. No bullets.")
-        msg = c.chat.completions.create(
-            model=GROQ_MODEL,
-            max_tokens=250,
-            messages=[{"role":"user","content":p}]
-        )
-        return msg.choices[0].message.content.strip()
-    except Exception as e:
-        print(f"[seneca-ai] Groq call failed: {e}")
-        return None
+    h=data.get("health",{})
+    flags=h.get("flags",[])
+    score=h.get("score",0)
+    grade=h.get("grade","?")
+    breakdown=h.get("breakdown",{})
+    bd_str="; ".join(f"{k}: {v}" for k,v in list(breakdown.items())[:8])
+    p = (f"You are SENECA's financial forensics engine. Analyze {data['name']} ({data['ticker']}) "
+         f"for hidden financial risks, accounting irregularities, and off-balance-sheet concerns.\n\n"
+         f"Quantitative health score: {score}/100 (Grade {grade})\n"
+         f"Key metrics: {bd_str}\n"
+         f"Flagged concerns: {', '.join(flags) if flags else 'None detected'}\n"
+         f"Sector: {data['sector']} | P/E: {data['pe']:.1f} | D/E: implied from score\n\n"
+         f"In exactly 3 sentences: (1) Confirm or challenge the health score with your assessment. "
+         f"(2) Identify the single biggest hidden risk an investor might miss. "
+         f"(3) Give a plain verdict on financial integrity. "
+         f"Be direct. No disclaimers. No bullets.")
+    return _groq_chat(p, max_tokens=900)
 
 # ── Members' Leaderboard ──────────────────────────────────────────────────────
 import threading
@@ -1003,24 +1001,16 @@ def get_leadership(query):
 
 def get_governance_ai(lead):
     if not GROQ_API_KEY: return None
-    try:
-        from groq import Groq
-        c = Groq(api_key=GROQ_API_KEY)
-        names = "; ".join(f"{p['name']} ({p['title']})" for p in lead["people"][:8])
-        p = (f"You are SENECA's corporate governance analyst. Assess the leadership of "
-             f"{lead['name']} ({lead['ticker']}).\n"
-             f"Sector: {lead['sector']} | Employees: {lead['employees']:,}\n"
-             f"Key leadership: {names}\n\n"
-             f"In exactly 3 sentences: (1) Characterize the leadership structure and its depth. "
-             f"(2) Note any governance strength or red flag (e.g. CEO/Chair duality, thin bench, key-person risk). "
-             f"(3) Give a plain verdict on management quality and stability. "
-             f"Be direct. No disclaimers. No bullets.")
-        msg = c.chat.completions.create(model=GROQ_MODEL, max_tokens=240,
-            messages=[{"role":"user","content":p}])
-        return msg.choices[0].message.content.strip()
-    except Exception as e:
-        print(f"[seneca-ai] Groq call failed: {e}")
-        return None
+    names = "; ".join(f"{p['name']} ({p['title']})" for p in lead["people"][:8])
+    p = (f"You are SENECA's corporate governance analyst. Assess the leadership of "
+         f"{lead['name']} ({lead['ticker']}).\n"
+         f"Sector: {lead['sector']} | Employees: {lead['employees']:,}\n"
+         f"Key leadership: {names}\n\n"
+         f"In exactly 3 sentences: (1) Characterize the leadership structure and its depth. "
+         f"(2) Note any governance strength or red flag (e.g. CEO/Chair duality, thin bench, key-person risk). "
+         f"(3) Give a plain verdict on management quality and stability. "
+         f"Be direct. No disclaimers. No bullets.")
+    return _groq_chat(p, max_tokens=800)
 
 @app.route("/api/leadership")
 def api_leadership():
