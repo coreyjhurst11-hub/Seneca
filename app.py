@@ -52,7 +52,7 @@ GROQ_MODEL             = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 
 # ── User store (with watchlist) ───────────────────────────────────────────────
 USER_FILE = pathlib.Path(os.environ.get("USER_FILE", "/tmp/seneca_users.json"))
-import hmac, secrets, time as _time
+import hmac, secrets, time as _time, threading
 
 def load_users():
     try: return json.loads(USER_FILE.read_text()) if USER_FILE.exists() else {}
@@ -436,7 +436,32 @@ def compute_health_score(info, is_etf=False):
     return {"score": score, "grade": grade, "flags": flags, "breakdown": breakdown}
 
 # ── fetch_quote ───────────────────────────────────────────────────────────────
+# ── Quote cache ───────────────────────────────────────────────────────────────
+# One lookup fires /api/quote, /api/ai and /api/health-ai almost simultaneously.
+# Without caching that's 3 rapid Yahoo hits per lookup, and the burst gets rate-
+# limited — which is exactly what silently killed the AI verdict & health analysis
+# (governance survived only because it fires later, from a separate tab). This
+# short-TTL cache means Yahoo is queried once and the AI calls reuse the result.
+_QUOTE_CACHE = {}
+_QUOTE_CACHE_TTL = 90          # seconds
+_QUOTE_LOCK = threading.Lock()
+
 def fetch_quote(query):
+    key = (query or "").strip().upper()
+    now = _time.time()
+    with _QUOTE_LOCK:
+        hit = _QUOTE_CACHE.get(key)
+        if hit and now - hit[0] < _QUOTE_CACHE_TTL:
+            return hit[1]
+    data = _fetch_quote_impl(query)        # may raise on a bad ticker — failures aren't cached
+    with _QUOTE_LOCK:
+        _QUOTE_CACHE[key] = (now, data)
+        if len(_QUOTE_CACHE) > 600:        # bound memory: evict the oldest entry
+            oldest = min(_QUOTE_CACHE.items(), key=lambda kv: kv[1][0])[0]
+            _QUOTE_CACHE.pop(oldest, None)
+    return data
+
+def _fetch_quote_impl(query):
     import yfinance as yf
     ticker = resolve_ticker(query)
     t = yf.Ticker(ticker); fi = t.fast_info
