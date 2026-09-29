@@ -46,6 +46,9 @@ _FAV_SVG = (
 FAVICON_TAG = ('<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,'
                + _b64.b64encode(_FAV_SVG.encode()).decode() + '"/>')
 GROQ_API_KEY           = os.environ.get("GROQ_API_KEY", "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")
+# Groq model for AI analysis. llama-3.3-70b-versatile was decommissioned 2026-08-16,
+# so the default is now Groq's current production model. Override via GROQ_MODEL env var.
+GROQ_MODEL             = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 
 # ── User store (with watchlist) ───────────────────────────────────────────────
 USER_FILE = pathlib.Path(os.environ.get("USER_FILE", "/tmp/seneca_users.json"))
@@ -555,12 +558,14 @@ def get_ai_verdict(data):
              f"Price ${data['price']:.2f} | Fair Value {comp_str} | P/E {data['pe']:.1f} | "
              f"Verdict: {data['verdict_text']}\nDirect, wise, no disclaimers, no bullets.")
         msg = c.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=GROQ_MODEL,
             max_tokens=200,
             messages=[{"role":"user","content":p}]
         )
         return msg.choices[0].message.content.strip()
-    except: return None
+    except Exception as e:
+        print(f"[seneca-ai] Groq call failed: {e}")
+        return None
 
 def get_health_ai(data):
     """LLM layer: cross-verify health flags, probe for hidden risks"""
@@ -585,12 +590,14 @@ def get_health_ai(data):
              f"(3) Give a plain verdict on financial integrity. "
              f"Be direct. No disclaimers. No bullets.")
         msg = c.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=GROQ_MODEL,
             max_tokens=250,
             messages=[{"role":"user","content":p}]
         )
         return msg.choices[0].message.content.strip()
-    except: return None
+    except Exception as e:
+        print(f"[seneca-ai] Groq call failed: {e}")
+        return None
 
 # ── Members' Leaderboard ──────────────────────────────────────────────────────
 import threading
@@ -983,10 +990,12 @@ def get_governance_ai(lead):
              f"(2) Note any governance strength or red flag (e.g. CEO/Chair duality, thin bench, key-person risk). "
              f"(3) Give a plain verdict on management quality and stability. "
              f"Be direct. No disclaimers. No bullets.")
-        msg = c.chat.completions.create(model="llama-3.3-70b-versatile", max_tokens=240,
+        msg = c.chat.completions.create(model=GROQ_MODEL, max_tokens=240,
             messages=[{"role":"user","content":p}])
         return msg.choices[0].message.content.strip()
-    except: return None
+    except Exception as e:
+        print(f"[seneca-ai] Groq call failed: {e}")
+        return None
 
 @app.route("/api/leadership")
 def api_leadership():
